@@ -4,6 +4,7 @@ from database.mongodb import connect_to_mongo, close_mongo_connection
 from fastapi.middleware.cors import CORSMiddleware
 
 from routes import auth, vault, documents, requests, access, messages
+from integrations import digilocker
 from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
 
@@ -56,6 +57,7 @@ app.include_router(documents.router)
 app.include_router(requests.router)
 app.include_router(access.router)
 app.include_router(messages.router)
+app.include_router(digilocker.router)
 
 @app.get("/")
 async def root():

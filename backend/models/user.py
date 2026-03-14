@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     name: str
     picture: Optional[str] = None
     public_key: Optional[str] = None
+    digilocker_token: Optional[str] = None
 
 class UserCreate(UserBase):
     google_id: str
