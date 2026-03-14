@@ -1,0 +1,135 @@
+# Omnimise Secure Vault
+
+## Project Overview
+
+The Omnimise Secure Vault is a highly secure, privacy-first document storage application designed with a zero-knowledge architecture. The core philosophy of this platform is that the server should never have access to the plaintext contents of user files. By cryptographically isolating data on the client side before it ever touches the network, the system guarantees that even database administrators or infrastructure providers cannot read user documents.
+
+This zero-knowledge mandate is achieved by executing all sensitive cryptographic operations natively within the user's browser using the Web Crypto API. Upon logging in with Google OAuth, the user is prompted for a secure PIN. This PIN is passed through a PBKDF2 key derivation function with 100,000 iterations to generate a strong, symmetric AES-GCM 256-bit key. Documents are encrypted on the client side using this derived vault key, and only the resulting ciphertexts are transmitted to the backend for storage in Google Cloud Storage. 
+
+## Architecture
+
+The system utilizes a decoupled frontend and backend architecture linked via a secure RESTful API. 
+
+1. **Frontend (React SPA)**: Operates entirely in the user's browser. It intercepts file uploads, generates unique cryptographic nonces (Initialization Vectors), encrypts the raw binary streams, and dispatches the ciphertext to the backend API. Upon retrieval, it reverses the process, decrypting the ciphertext entirely within local memory before surfacing the file to the user.
+2. **Backend (FastAPI)**: Acts as an unprivileged broker. It validates user identity via JWTs, enforces strict access control matrices stored in MongoDB, and orchestrates the arbitrary binary blobs into Google Cloud Storage (GCS). It never possesses the cryptographic keys.
+3. **Database (MongoDB)**: Stores relationships, access permissions, temporal session metadata, and pointers to the GCS blobs. It retains the user's encrypted RSA public keys for document sharing scenarios but is blinded to the actual file contents.
+4. **Storage (Google Cloud Storage)**: Acts as the encrypted, infinitely scalable data lake housing the raw ciphertexts.
+
+## Technology Stack
+
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend** | React, Vite, Tailwind CSS | High-performance SPA with styling. |
+| **Backend** | Python, FastAPI, Uvicorn | Asynchronous, type-safe REST API server. |
+| **Database** | MongoDB (Motor Driver) | NoSQL document store for metadata and access schemas. |
+| **Storage** | Google Cloud Storage | Highly durable object storage backend for encrypted blobs. |
+| **Authentication** | Google OAuth, Python-Jose | Identity federation merged with strict session JWT issuance. |
+
+## Local Development Setup
+
+### Prerequisites
+*   Node.js (v18+)
+*   Python (3.9+)
+*   MongoDB running locally on default port 27017
+*   Google Cloud Platform project with OAuth credentials and a GCS Bucket
+*   DigiLocker API credentials (if testing government integrations)
+
+### Backend Setup
+1. Navigate to the `backend` directory.
+2. Create and activate a Python virtual environment: `python -m venv venv` and `source venv/bin/activate` (or `venv\Scripts\activate` on Windows).
+3. Install dependencies: `pip install -r requirements.txt`.
+4. Copy the environment template: `cp .env.example .env` and populate the fields (see Environment Variables section).
+5. Start the server: `uvicorn main:app --reload`. The API will be available at `http://localhost:8000`.
+
+### Frontend Setup
+1. Navigate to the `frontend` directory.
+2. Install dependencies: `npm install`.
+3. Copy the environment template: `cp .env.example .env` and populate the fields.
+4. Start the development server: `npm run dev`. The UI will be available at `http://localhost:5173`.
+
+### Required Environment Variables
+
+**Backend (`backend/.env`)**
+*   `MONGO_URI`: Connection string for MongoDB (default: `mongodb://localhost:27017`).
+*   `DATABASE_NAME`: Name of the MongoDB database (default: `document_vault`).
+*   `JWT_SECRET`: Cryptographically secure random string for signing JWTs.
+*   `JWT_ALGORITHM`: Hashing algorithm for JWTs (default: `HS256`).
+*   `JWT_EXPIRY_HOURS`: Token lifespan (default: `24`).
+*   `GOOGLE_CLIENT_ID`: OAuth 2.0 Client ID from GCP Console.
+*   `GOOGLE_CLIENT_SECRET`: OAuth 2.0 Client Secret from GCP Console.
+*   `GOOGLE_REDIRECT_URI`: OAuth redirect target (default: `postmessage` for frontend callback handling).
+*   `GCS_BUCKET_NAME`: Target Google Cloud Storage bucket name.
+*   `GCS_SERVICE_ACCOUNT_JSON`: Path to the GCP Service Account credentials JSON file.
+*   `FRONTEND_URL`: URL of the React application for rigorous CORS enforcement.
+*   `DIGILOCKER_CLIENT_ID`: API Client ID for DigiLocker OAuth.
+*   `DIGILOCKER_CLIENT_SECRET`: API Secret for DigiLocker OAuth.
+*   `DIGILOCKER_REDIRECT_URI`: Server callback URL for DigiLocker code exchange.
+
+**Frontend (`frontend/.env`)**
+*   `VITE_API_URL`: Root URL of the FastAPI backend (default: `http://localhost:8000`).
+*   `VITE_GOOGLE_CLIENT_ID`: OAuth 2.0 Client ID matching the backend credentials for federated login.
+
+## API Reference
+
+### Auth
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/auth/google` | No | Exchanges Google authorization code for system JWT. Creates user profile. |
+| GET | `/auth/me` | Yes | Retrieves current authenticated user profile. |
+| GET | `/auth/users/{user_id}/public-key` | Yes | Retrieves the RSA public key of a specified user for document sharing. |
+
+### Vault
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/vault` | Yes | Creates a new cryptographic vault boundary for the user. |
+| GET | `/vault` | Yes | Lists all vaults owned by the authenticated user. |
+
+### Documents
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/documents/upload` | Yes | Accepts AES-encrypted multipart blob and uploads to GCS via proxy. |
+| GET | `/documents` | Yes | Lists metadata of documents within a specified authorized vault. |
+| GET | `/documents/{id}` | Yes | Retrieves temporary, 15-minute V4 signed URL for secure GCS downloading. |
+
+### Requests
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/requests` | Yes | Creates an organizational request for access to a specific document type. |
+| GET | `/requests` | Yes | Retrieves inbox requests pending for the authenticated user. |
+
+### Access
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/access/share` | Yes | Submits a recipient's RSA-wrapped AES key tied to a specific document. |
+| GET | `/access/list` | Yes | Retrieves wrapped keys for shared documents matching the current user. |
+
+### Messages
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/messages/send` | Yes | Transmits an end-to-end encrypted messaging payload to another user. |
+| GET | `/messages/inbox` | Yes | Retrieves the encrypted message queue for the current user. |
+
+### Integrations
+| Method | Path | Auth Required | Description |
+| :--- | :--- | :--- | :--- |
+| POST | `/backup/trigger` | Yes | Manually forces an in-memory ZIP aggregation and Google Drive backup of entire vault. |
+| GET | `/digilocker/auth` | Yes | Initiates the DigiLocker OAuth integration pipeline. |
+| GET | `/digilocker/import/{uri}` | Yes | Streams raw DigiLocker document bytes securely to the frontend for algorithmic encryption. |
+
+## Security Model
+
+The foundation of the platform's security is its integration of various modern cryptographic layers:
+
+*   **Zero-Knowledge Paradigm**: The server assumes a hostile or breached state. It operates under the constraint that it can only store routing metadata and ciphertext, completely insulating user privacy.
+*   **PBKDF2 Key Derivation**: User PINs are combined with the Vault ID (acting as a salt) and run through 100,000 iterations of HMAC-SHA256, mathematically delaying brute-force attacks against weak PINs.
+*   **AES-GCM-256 Symmetric Encryption**: Documents are encrypted utilizing military-grade AES with a 256-bit key length and a Galois/Counter Mode (GCM) layout, guaranteeing both absolute confidentiality and ciphertext authenticity (tamper evidence).
+*   **In-Memory Lifecycle**: The derived AES keys are housed purely in transient React Component state natively governed by the JavaScript garbage collector. Keys do not persist in `localStorage`, `sessionStorage`, or indexed DB structures, terminating immediately upon a page refresh or explicit browser session closure.
+*   **Asymmetric Key Wrapping**: Document sharing avoids central key escrow by utilizing 2048-bit RSA-OAEP schemas. The sender's client wraps the symmetric vault key specifically for the recipient's public key mathematically, requiring the recipient's locally stored private key to decrypt traversing through the server.
+*   **Signed URLs**: The backend provisions heavily restricted, 15-minute time-to-live signed Google Cloud Storage endpoint URLs dynamically, deprecating permanent public exposure of blob locations.
+*   **JWT Authorization**: API perimeter defenses evaluate short-lived JSON Web Tokens signed by the backend framework incorporating explicit identity claims evaluated prior to any database operation.
+
+## Known Limitations
+
+*   **Fatal Key Loss on Session End**: Because keys reside strictly in transient memory without severe compromise of the risk profile, closing the browser implicitly locks the vault. If the user forgets their PIN, mathematical recovery of the documents is permanently technically impossible.
+*   **HTTP Polling Latency**: Real-time notifications and encrypted messaging rely on client-side HTTP `setInterval` polling (every 5 seconds) rather than persistent bi-directional WebSockets, causing minor visual latency up to the polling interval boundary and incrementally increased server load.
+*   **Single-Region Cloud Storage**: Current infrastructure targets a singular Google Cloud Storage bucket natively determined by environment parameters, potentially exposing users to geographical latency outside the bucket's home region footprint.
