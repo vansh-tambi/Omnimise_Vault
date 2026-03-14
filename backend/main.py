@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import os
 from contextlib import asynccontextmanager
 from database.mongodb import connect_to_mongo, close_mongo_connection
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,7 +46,7 @@ app = FastAPI(title="Secure Document Vault", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:5173")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
