@@ -5,7 +5,7 @@ from models.document import DocumentResponse, DocumentCreate
 from routes.auth import get_current_user
 from services.vault_service import check_vault_access
 from services.document_service import create_document, get_documents_by_vault, get_document_by_id
-from integrations.gcs_storage import upload_document
+from integrations.gcs_storage import upload_document, generate_signed_url
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -21,14 +21,15 @@ async def upload_file(
         
     file_bytes = await file.read()
     size_bytes = len(file_bytes)
-    storage_url = await upload_document(file_bytes, file.filename)
+    # Uploading just the path using the owner's ID
+    storage_path = await upload_document(file_bytes, current_user.id, file.filename)
     
     doc_create = DocumentCreate(
         filename=file.filename,
         vault_id=vault_id,
         content_type=file.content_type,
         size_bytes=size_bytes,
-        storage_url=storage_url
+        storage_url=storage_path
     )
     
     return await create_document(doc_create, current_user.id)
@@ -49,7 +50,26 @@ async def get_document(id: str, current_user: UserResponse = Depends(get_current
         
     has_access = await check_vault_access(doc.vault_id, current_user.id)
     if not has_access:
-        raise HTTPException(status_code=403, detail="Not authorized to access this vault")
+        # Check document-level access
+        from database.mongodb import get_database
+        from datetime import datetime
+        db = get_database()
+        
+        access_record = await db.access.find_one({
+            "document_id": doc.id,
+            "shared_with": current_user.id
+        })
+        if access_record:
+            expires_at = access_record.get("expires_at")
+            if expires_at and expires_at <= datetime.utcnow():
+                raise HTTPException(status_code=403, detail="Access has expired")
+            has_access = True
+
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+        
+    # Generate the signed, timed URL since user is authorized
+    temporary_url = generate_signed_url(doc.storage_url, expiry_minutes=15)
         
     # Return storage URL for downloading
     # If standard retrieval is used, the frontend directly downloads via URL
@@ -58,5 +78,5 @@ async def get_document(id: str, current_user: UserResponse = Depends(get_current
         "filename": doc.filename,
         "content_type": doc.content_type,
         "size_bytes": doc.size_bytes,
-        "storage_url": doc.storage_url
+        "storage_url": temporary_url
     }

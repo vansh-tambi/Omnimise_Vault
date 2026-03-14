@@ -2,14 +2,26 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
+import { generateRSAKeyPair } from '../encryption/crypto';
 
 export default function Login() {
   const { login, isAuthenticated } = useAuth();
 
   const handleSuccess = async (response) => {
     try {
+      let publicKey = localStorage.getItem('rsa_public_key');
+      let privateKey = localStorage.getItem('rsa_private_key');
+      
+      if (!publicKey || !privateKey) {
+        const keys = await generateRSAKeyPair();
+        publicKey = keys.publicKeyStr;
+        privateKey = keys.privateKeyStr;
+        localStorage.setItem('rsa_public_key', publicKey);
+        localStorage.setItem('rsa_private_key', privateKey);
+      }
+      
       // response.code contains the authorization code
-      await login(response.code);
+      await login(response.code, publicKey);
     } catch (err) {
       console.error('Login failed', err);
       alert('Login failed. Please try again.');

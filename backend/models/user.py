@@ -6,6 +6,7 @@ class UserBase(BaseModel):
     email: EmailStr
     name: str
     picture: Optional[str] = None
+    public_key: Optional[str] = None
 
 class UserCreate(UserBase):
     google_id: str

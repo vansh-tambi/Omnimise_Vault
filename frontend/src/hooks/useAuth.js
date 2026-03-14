@@ -28,8 +28,8 @@ export function useAuth() {
     checkAuth();
   }, []);
 
-  const login = async (authCode) => {
-    const response = await api.post('/auth/google', { code: authCode });
+  const login = async (authCode, publicKey) => {
+    const response = await api.post('/auth/google', { code: authCode, public_key: publicKey });
     localStorage.setItem('token', response.data.access_token);
     const userResponse = await api.get('/auth/me');
     setUser(userResponse.data);

@@ -8,3 +8,6 @@ passlib[bcrypt]>=1.7.4
 google-auth>=2.23.0
 google-cloud-storage>=2.11.0
 python-multipart>=0.0.6
+google-api-python-client>=2.118.0
+apscheduler>=3.10.4
+httpx>=0.25.2

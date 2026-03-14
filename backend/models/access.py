@@ -5,6 +5,7 @@ from typing import Optional
 class AccessBase(BaseModel):
     document_id: str
     shared_with: str
+    encrypted_key_for_recipient: str
     permission: str = "read" # read, write
     expires_at: Optional[datetime] = None
 
