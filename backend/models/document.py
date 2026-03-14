@@ -12,13 +12,12 @@ class DocumentCreate(DocumentBase):
 
 class DocumentInDB(DocumentCreate):
     id: str = Field(alias="_id", default=None)
-    owner_id: str
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow) # Changed from uploaded_at to created_at
 
     model_config = ConfigDict(populate_by_name=True)
 
 class DocumentResponse(DocumentBase):
     id: str
-    owner_id: str
-    uploaded_at: datetime
+    vault_id: str
+    created_at: datetime
     model_config = ConfigDict(populate_by_name=True)

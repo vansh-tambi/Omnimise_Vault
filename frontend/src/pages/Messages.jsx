@@ -8,6 +8,8 @@ export default function Messages() {
 
   useEffect(() => {
     fetchMessages();
+    const interval = setInterval(fetchMessages, 5000)
+    return () => clearInterval(interval)
   }, []);
 
   const fetchMessages = async () => {

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from integrations.google_oauth import verify_google_token
+from integrations.google_oauth import verify_google_token_with_code
 from services.auth_service import create_access_token, verify_token
 from database.mongodb import get_database
 from models.user import UserInDB, UserResponse
@@ -9,8 +9,8 @@ from models.user import UserInDB, UserResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-class GoogleToken(BaseModel):
-    token: str
+class GoogleAuthPayload(BaseModel):
+    code: str
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
     payload = verify_token(token)
@@ -38,11 +38,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
     return UserResponse(**user_dict)
 
 @router.post("/google")
-async def google_login(token_data: GoogleToken):
-    # verify token string from frontend
-    idinfo = await verify_google_token(token_data.token)
+async def google_login(payload: GoogleAuthPayload):
+    # Exchange code for token and fetch profile
+    idinfo = await verify_google_token_with_code(payload.code)
     if not idinfo:
-        raise HTTPException(status_code=400, detail="Invalid Google token")
+        raise HTTPException(status_code=400, detail="Invalid Google profile data")
         
     # extract user info
     google_id = idinfo["sub"]

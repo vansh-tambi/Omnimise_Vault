@@ -18,5 +18,6 @@ class UserInDB(UserCreate):
 
 class UserResponse(UserBase):
     id: str
+    created_at: datetime
 
     model_config = ConfigDict(populate_by_name=True)

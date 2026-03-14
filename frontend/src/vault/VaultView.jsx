@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react';
 import { FileText, Download, Share2, ShieldAlert } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
+import { encryptFile, decryptFile } from '../encryption/crypto';
+import { useVaultKey } from '../context/VaultKeyContext';
+import VaultPinPrompt from './VaultPinPrompt';
 
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { vaultKey } = useVaultKey();
+  const currentKey = vaultKey?.[vaultId];
 
   useEffect(() => {
     const fetchDocs = async () => {
@@ -27,6 +32,17 @@ export default function VaultView({ vaultId }) {
     formData.append('file', file);
 
     try {
+      // Zero-Knowledge Encryption Pipeline
+      const { encrypted, iv } = await encryptFile(file, currentKey);
+      
+      // We must append IV to understand how to decrypt later
+      const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
+      
+      const formData = new FormData();
+      formData.append('vault_id', vaultId);
+      // Pass original filename so UI knows what it is, even though content is encrypted
+      formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
+
       const res = await api.post('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -37,14 +53,38 @@ export default function VaultView({ vaultId }) {
     }
   };
 
-  const downloadDoc = async (docId) => {
+  const downloadDoc = async (doc) => {
     try {
-      const res = await api.get(`/documents/${docId}`);
-      window.open(res.data.storage_url, '_blank');
+      const res = await api.get(`/documents/${doc.id}`);
+      
+      // Fetch encrypted blob
+      const fileRes = await fetch(res.data.storage_url);
+      const encryptedBuffer = await fileRes.arrayBuffer();
+      
+      // Extract IV (first 12 bytes)
+      const iv = encryptedBuffer.slice(0, 12);
+      const data = encryptedBuffer.slice(12);
+      
+      // Decrypt
+      const decrypted = await decryptFile(data, new Uint8Array(iv), currentKey);
+      
+      // Download 
+      const blob = new Blob([decrypted], { type: doc.content_type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.filename;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      alert("Failed to retrieve document");
+      console.error(err);
+      alert("Failed to decrypt or retrieve document");
     }
   };
+
+  if (!currentKey) {
+    return <VaultPinPrompt vaultId={vaultId} onKeyDerived={() => {}} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -81,7 +121,7 @@ export default function VaultView({ vaultId }) {
                 <button onClick={() => {}} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition" title="Share Access">
                   <Share2 className="w-4 h-4" />
                 </button>
-                <button onClick={() => downloadDoc(doc.id)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Download">
+                <button onClick={() => downloadDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
                   <Download className="w-4 h-4" />
                 </button>
               </div>

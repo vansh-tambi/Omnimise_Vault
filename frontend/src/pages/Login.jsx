@@ -8,7 +8,8 @@ export default function Login() {
 
   const handleSuccess = async (response) => {
     try {
-      await login(response.credential);
+      // response.code contains the authorization code
+      await login(response.code);
     } catch (err) {
       console.error('Login failed', err);
       alert('Login failed. Please try again.');
@@ -43,6 +44,7 @@ export default function Login() {
                 shape="rectangular"
                 text="continue_with"
                 width="100%"
+                flow="auth-code"
               />
             </div>
           </div>

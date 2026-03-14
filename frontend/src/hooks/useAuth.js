@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useVaultKey } from '../context/VaultKeyContext';
 import api from '../services/api';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { clearKey } = useVaultKey();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -26,8 +28,8 @@ export function useAuth() {
     checkAuth();
   }, []);
 
-  const login = async (googleToken) => {
-    const response = await api.post('/auth/google', { token: googleToken });
+  const login = async (authCode) => {
+    const response = await api.post('/auth/google', { code: authCode });
     localStorage.setItem('token', response.data.access_token);
     const userResponse = await api.get('/auth/me');
     setUser(userResponse.data);
@@ -35,6 +37,7 @@ export function useAuth() {
 
   const logout = () => {
     localStorage.removeItem('token');
+    clearKey();
     setUser(null);
     window.location.href = '/login';
   };

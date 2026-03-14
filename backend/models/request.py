@@ -3,8 +3,9 @@ from typing import Optional
 from datetime import datetime
 
 class RequestBase(BaseModel):
-    vault_id: str
-    target_user_id: str
+    # Changes based on user exact fields
+    organization_id: str
+    document_type: str
 
 class RequestCreate(RequestBase):
     pass
