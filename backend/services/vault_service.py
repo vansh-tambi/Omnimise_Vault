@@ -1,0 +1,47 @@
+from database.mongodb import get_database
+from models.vault import VaultInDB, VaultCreate
+from bson import ObjectId
+from typing import List
+
+async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
+    db = get_database()
+    vault_dict = vault_data.model_dump()
+    vault_dict["owner_id"] = user_id
+    
+    vault_db = VaultInDB(**vault_dict)
+    vault_db_dict = vault_db.model_dump(by_alias=True, exclude_none=True)
+    if "_id" in vault_db_dict:
+        del vault_db_dict["_id"]
+        
+    result = await db.vaults.insert_one(vault_db_dict)
+    vault_db.id = str(result.inserted_id)
+    return vault_db
+
+async def get_user_vaults(user_id: str) -> List[VaultInDB]:
+    db = get_database()
+    cursor = db.vaults.find({"owner_id": user_id})
+    vaults = []
+    async for document in cursor:
+        document["_id"] = str(document["_id"])
+        vaults.append(VaultInDB(**document))
+    return vaults
+
+async def check_vault_access(vault_id: str, user_id: str) -> bool:
+    db = get_database()
+    try:
+        # Check if owner
+        vault = await db.vaults.find_one({"_id": ObjectId(vault_id), "owner_id": user_id})
+        if vault:
+            return True
+        
+        # Check if shared access
+        access = await db.access.find_one({"vault_id": vault_id, "user_id": user_id})
+        if access:
+            return True
+    except Exception:
+        # Fallback if vault_id is string
+        vault = await db.vaults.find_one({"_id": vault_id, "owner_id": user_id})
+        if vault:
+            return True
+        
+    return False

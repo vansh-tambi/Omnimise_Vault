@@ -1,0 +1,43 @@
+from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+from models.user import UserResponse
+from models.access import AccessCreate, AccessResponse, AccessInDB
+from routes.auth import get_current_user
+from database.mongodb import get_database
+
+router = APIRouter(prefix="/access", tags=["access"])
+
+@router.post("/share", response_model=AccessResponse)
+async def share_access(acc: AccessCreate, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    # Check if user owns vault
+    vault = await db.vaults.find_one({"_id": acc.vault_id, "owner_id": current_user.id})
+    if not vault:
+        # try object id
+        from bson import ObjectId
+        try:
+            vault = await db.vaults.find_one({"_id": ObjectId(acc.vault_id), "owner_id": current_user.id})
+        except:
+            pass
+            
+    if not vault:
+        raise HTTPException(status_code=403, detail="Must own vault to share it")
+        
+    acc_db = AccessInDB(**acc.model_dump(), granted_by=current_user.id)
+    acc_db_dict = acc_db.model_dump(by_alias=True, exclude_none=True)
+    if "_id" in acc_db_dict:
+        del acc_db_dict["_id"]
+        
+    result = await db.access.insert_one(acc_db_dict)
+    acc_db.id = str(result.inserted_id)
+    return acc_db
+
+@router.get("/list", response_model=List[AccessResponse])
+async def list_access(vault_id: str, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    cursor = db.access.find({"vault_id": vault_id})
+    acts = []
+    async for document in cursor:
+        document["_id"] = str(document["_id"])
+        acts.append(AccessInDB(**document))
+    return acts
