@@ -1,0 +1,94 @@
+import { useState, useEffect } from 'react';
+import { FileText, Download, Share2, ShieldAlert } from 'lucide-react';
+import api from '../services/api';
+import UploadButton from '../components/UploadButton';
+
+export default function VaultView({ vaultId }) {
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      try {
+        const res = await api.get(`/documents?vault_id=${vaultId}`);
+        setDocuments(res.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDocs();
+  }, [vaultId]);
+
+  const handleUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('vault_id', vaultId);
+    formData.append('file', file);
+
+    try {
+      const res = await api.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setDocuments(prev => [...prev, res.data]);
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed');
+    }
+  };
+
+  const downloadDoc = async (docId) => {
+    try {
+      const res = await api.get(`/documents/${docId}`);
+      window.open(res.data.storage_url, '_blank');
+    } catch (err) {
+      alert("Failed to retrieve document");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between bg-gray-800 p-4 rounded-lg border border-gray-700">
+        <div className="flex items-center gap-3">
+          <ShieldAlert className="text-green-400 w-6 h-6" />
+          <span className="text-sm text-gray-300">All files are securely encrypted before storage.</span>
+        </div>
+        <UploadButton onUpload={handleUpload} />
+      </div>
+
+      {loading ? (
+        <div className="text-center p-12 text-gray-400">Loading your secure documents...</div>
+      ) : documents.length === 0 ? (
+        <div className="card text-center p-16 border-dashed border-2">
+          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-medium text-white mb-2">Vault is empty</h3>
+          <p className="text-gray-400 max-w-sm mx-auto">Upload sensitive files to keep them secure and accessible only by you.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {documents.map(doc => (
+            <div key={doc.id} className="card p-4 flex items-center justify-between hover:bg-gray-800 transition">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div className="truncate pr-4">
+                  <p className="font-medium text-gray-200 truncate">{doc.filename}</p>
+                  <p className="text-xs text-gray-500 capitalize">{doc.content_type.split('/')[1] || doc.content_type} • {(doc.size_bytes / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => {}} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition" title="Share Access">
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => downloadDoc(doc.id)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Download">
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
