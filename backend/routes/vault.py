@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List
 from models.user import UserResponse
 from models.vault import VaultCreate, VaultResponse
 from services.vault_service import create_vault, get_user_vaults, check_vault_access
 from services.audit_service import log_action
 from database.mongodb import get_database
-from fastapi import Request
+from routes.auth import get_current_user
 
 router = APIRouter(prefix="/vault", tags=["vault"])
 
