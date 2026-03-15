@@ -6,6 +6,9 @@ class DocumentBase(BaseModel):
     vault_id: str
     content_type: str
     size_bytes: int
+    self_destruct_after_views: Optional[int] = None
+    self_destruct_at: Optional[datetime] = None
+    view_count: int = 0
 
 class DocumentCreate(DocumentBase):
     storage_url: str

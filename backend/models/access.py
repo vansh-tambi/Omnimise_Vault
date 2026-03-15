@@ -8,6 +8,8 @@ class AccessBase(BaseModel):
     encrypted_key_for_recipient: str
     permission: str = "read" # read, write
     expires_at: Optional[datetime] = None
+    max_views: Optional[int] = None
+    current_views: int = 0
 
 class AccessCreate(AccessBase):
     pass

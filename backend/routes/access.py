@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List
 from models.user import UserResponse
 from models.access import AccessCreate, AccessResponse, AccessInDB
 from routes.auth import get_current_user
 from database.mongodb import get_database
+from services.audit_service import log_action
 
 router = APIRouter(prefix="/access", tags=["access"])
 
 @router.post("/share", response_model=AccessResponse)
-async def share_access(acc: AccessCreate, current_user: UserResponse = Depends(get_current_user)):
+async def share_access(acc: AccessCreate, request: Request, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
     from bson import ObjectId
     
@@ -37,6 +38,9 @@ async def share_access(acc: AccessCreate, current_user: UserResponse = Depends(g
         
     result = await db.access.insert_one(acc_db_dict)
     acc_db.id = str(result.inserted_id)
+    
+    await log_action(db, current_user.id, "file_shared", request, document_id=str(doc.get("_id")))
+    
     return acc_db
 
 @router.get("/list", response_model=List[AccessResponse])
