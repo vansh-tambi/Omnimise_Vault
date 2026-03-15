@@ -1,4 +1,4 @@
-import { UploadCloud } from 'lucide-react';
+import { CloudUpload } from 'lucide-react';
 
 export default function UploadButton({ onUpload }) {
   const handleFileChange = (e) => {
@@ -16,7 +16,7 @@ export default function UploadButton({ onUpload }) {
         title="Upload Document"
       />
       <button className="btn-primary flex items-center gap-2 shadow-lg shadow-blue-500/20">
-        <UploadCloud className="w-5 h-5" />
+        <CloudUpload className="w-5 h-5" />
         <span>Upload Document</span>
       </button>
     </div>
