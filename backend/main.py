@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 import os
 from contextlib import asynccontextmanager
 from database.mongodb import connect_to_mongo, close_mongo_connection
@@ -64,8 +65,27 @@ app.include_router(digilocker.router)
 async def root():
     return {"message": "Welcome to Secure Document Vault API"}
 
+@app.get("/local-files/{file_path:path}")
+async def get_local_file(
+    file_path: str, 
+    current_user: auth.UserResponse = Depends(auth.get_current_user)
+):
+    if not file_path.startswith(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        
+    local_storage_path = os.path.join(os.path.dirname(__file__), "local_storage", file_path)
+    
+    if not os.path.exists(local_storage_path):
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    def iterfile():
+        with open(local_storage_path, "rb") as f:
+            yield from f
+            
+    return StreamingResponse(iterfile(), media_type="application/octet-stream")
+
 @app.post("/backup/trigger")
-async def manual_backup_trigger(current_user: auth.UserResponse = auth.Depends(auth.get_current_user)):
+async def manual_backup_trigger(current_user: auth.UserResponse = Depends(auth.get_current_user)):
     from integrations.google_drive import backup_user_vault
     import asyncio
     
