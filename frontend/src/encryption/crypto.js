@@ -60,23 +60,50 @@ export async function generateRSAKeyPair() {
   );
 }
 
+// Safe base64 encode for potentially large buffers (avoids spread stack overflow)
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export async function exportPublicKeyAsBase64(publicKey) {
   const exported = await crypto.subtle.exportKey("spki", publicKey);
-  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+  return arrayBufferToBase64(exported);
 }
 
 export async function exportPrivateKeyAsBase64(privateKey) {
   const exported = await crypto.subtle.exportKey("pkcs8", privateKey);
-  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+  return arrayBufferToBase64(exported);
 }
 
 export async function importPublicKeyFromBase64(base64String) {
-  // Normalize base64url to standard base64 (replace - with +, _ with /) and add padding
-  const normalized = base64String
+  // Strip PEM headers/footers if present, then all whitespace
+  const stripped = base64String
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
+    .replace(/\s+/g, '');
+
+  // Normalize base64url → standard base64
+  const normalized = stripped
     .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .padEnd(Math.ceil(base64String.length / 4) * 4, '=');
-  const binaryDerString = atob(normalized);
+    .replace(/_/g, '/');
+
+  // Fix padding: length must be a multiple of 4
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+
+  let binaryDerString;
+  try {
+    binaryDerString = atob(padded);
+  } catch (e) {
+    throw new Error(
+      `importPublicKeyFromBase64: atob failed. First 80 chars of cleaned key: "${padded.slice(0, 80)}". Original error: ${e.message}`
+    );
+  }
+
   const binaryDer = new Uint8Array(binaryDerString.length);
   for (let i = 0; i < binaryDerString.length; i++) {
     binaryDer[i] = binaryDerString.charCodeAt(i);
@@ -91,12 +118,14 @@ export async function importPublicKeyFromBase64(base64String) {
 }
 
 export async function importPrivateKeyFromBase64(base64String) {
-  // Normalize base64url to standard base64
-  const normalized = base64String
+  // Strip all whitespace, then normalize base64url to standard base64, then fix padding
+  const cleaned = base64String.replace(/\s/g, '');
+  const normalized = cleaned
     .replace(/-/g, '+')
     .replace(/_/g, '/')
-    .padEnd(Math.ceil(base64String.length / 4) * 4, '=');
-  const binaryDerString = atob(normalized);
+    .replace(/={0,2}$/, '');
+  const padded = normalized + '=='.slice(0, (4 - normalized.length % 4) % 4);
+  const binaryDerString = atob(padded);
   const binaryDer = new Uint8Array(binaryDerString.length);
   for (let i = 0; i < binaryDerString.length; i++) {
     binaryDer[i] = binaryDerString.charCodeAt(i);
@@ -117,7 +146,7 @@ export async function wrapVaultKey(vaultKey, recipientPublicKey) {
     recipientPublicKey,
     { name: "RSA-OAEP" }
   );
-  return btoa(String.fromCharCode(...new Uint8Array(wrapped)));
+  return arrayBufferToBase64(wrapped);
 }
 
 export async function unwrapVaultKey(wrappedKeyBase64, privateKey) {

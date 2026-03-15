@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Share2, ShieldAlert, Trash2 } from 'lucide-react';
+import { FileText, Download, Share2, ShieldAlert, Trash2, Eye } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
 import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey, hashFile } from '../encryption/crypto';
@@ -14,12 +14,12 @@ export default function VaultView({ vaultId }) {
   const { vaultKey } = useVaultKey();
   const currentKey = vaultKey?.[vaultId];
   const { user } = useAuth();
-  
+
   const [sharingDoc, setSharingDoc] = useState(null);
-  const [recipientId, setRecipientId] = useState('');
-  const [shareLoading, setShareLoading] = useState(false);
-  
-  const [uploadOptions, setUploadOptions] = useState({ selfDestructViews: '', selfDestructDate: '' });
+
+  // Vault-level self-destruct settings
+  const [vaultSettings, setVaultSettings] = useState({ self_destruct_views: '', self_destruct_at: '' });
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   useEffect(() => {
     const fetchDocs = async () => {
@@ -32,102 +32,115 @@ export default function VaultView({ vaultId }) {
         setLoading(false);
       }
     };
+    const fetchVaultSettings = async () => {
+      try {
+        const vaults = await api.get('/vault');
+        const vault = vaults.data.find(v => v.id === vaultId);
+        if (vault) {
+          setVaultSettings({
+            self_destruct_views: vault.self_destruct_views ?? '',
+            self_destruct_at: vault.self_destruct_at
+              ? new Date(vault.self_destruct_at).toISOString().slice(0, 16)
+              : ''
+          });
+        }
+      } catch (err) {
+        console.error('Could not fetch vault settings', err);
+      }
+    };
     fetchDocs();
+    fetchVaultSettings();
   }, [vaultId]);
 
   const handleUpload = async (file) => {
-    const formData = new FormData();
-    formData.append('vault_id', vaultId);
-    formData.append('file', file);
-
     try {
       // Zero-Knowledge Encryption Pipeline
       const fileBuffer = await file.arrayBuffer();
       const fileHash = await hashFile(fileBuffer);
-      
+
       const { encrypted, iv } = await encryptFile(file, currentKey);
-      
-      // We must append IV to understand how to decrypt later
+
+      // Prepend IV to encrypted blob so we can split it on download
       const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
-      
+
       const formData = new FormData();
       formData.append('vault_id', vaultId);
-      // Pass original filename so UI knows what it is, even though content is encrypted
       formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
       formData.append('file_hash', fileHash);
-      
-      if (uploadOptions.selfDestructViews) {
-         formData.append('self_destruct_after_views', uploadOptions.selfDestructViews);
-      }
-      if (uploadOptions.selfDestructDate) {
-         formData.append('self_destruct_at', new Date(uploadOptions.selfDestructDate).toISOString());
-      }
 
       const res = await api.post('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setDocuments(prev => [...prev, res.data]);
-      setUploadOptions({ selfDestructViews: '', selfDestructDate: '' });
     } catch (err) {
       console.error(err);
       alert('Upload failed: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  const downloadDoc = async (doc) => {
+  const downloadDoc = async (doc, forceDownload = false) => {
     if (!currentKey) {
-      alert('Vault is locked. Enter your PIN to unlock and then download.');
+      alert('Vault is locked. Enter your PIN to unlock and then access documents.');
       return;
     }
     try {
-      // Get the document metadata + signed/local URL from backend
+      // ... existing decryption logic ...
       const res = await api.get(`documents/${doc.id}`);
       const storageUrl = res.data.storage_url;
       
-      // Fetch the encrypted file — use authenticated api if local, plain fetch if signed (GCS)
       let encryptedBuffer;
-      if (storageUrl.startsWith('http://localhost')) {
-        // Local storage: needs auth header, use api
+      if (storageUrl.startsWith('http://localhost') || storageUrl.startsWith('/')) {
         const fileRes = await api.get(storageUrl, { responseType: 'arraybuffer' });
         encryptedBuffer = fileRes.data;
       } else {
-        // Signed GCS URL: already has auth embedded
         const fileRes = await fetch(storageUrl);
         if (!fileRes.ok) throw new Error(`File fetch failed: ${fileRes.status}`);
         encryptedBuffer = await fileRes.arrayBuffer();
       }
       
-      // Extract IV (first 12 bytes) then ciphertext
       const iv = new Uint8Array(encryptedBuffer.slice(0, 12));
       const data = encryptedBuffer.slice(12);
-      
-      // Decrypt using vault key
       const decrypted = await decryptFile(data, iv, currentKey);
       
-      // Integrity check
       const computedHash = await hashFile(decrypted);
       if (doc.file_hash && computedHash !== doc.file_hash) {
         alert('Integrity check failed. This file may have been tampered with.');
         return;
       }
       
-      // Trigger download
+      // Open or Download
       const blob = new Blob([decrypted], { type: doc.content_type || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      if (forceDownload) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        // Open in new tab — use anchor with target=_blank to bypass popup blocker
+        // (window.open after await is treated as a popup by Chrome/Firefox)
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      
+      // Clean up after a delay so it has time to open
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error('Access failed:', err);
       if (err.response?.status === 410) {
         alert('This document was permanently destroyed as configured.');
         setDocuments(prev => prev.filter(d => d.id !== doc.id));
       } else {
-        alert('Download failed: ' + (err.response?.data?.detail || err.message));
+        alert('Failed to access document: ' + (err.response?.data?.detail || err.message));
       }
     }
   };
@@ -146,12 +159,22 @@ export default function VaultView({ vaultId }) {
     }
   };
 
-  const handleCloseShare = () => {
-    setSharingDoc(null);
-  };
+  const handleCloseShare = () => setSharingDoc(null);
 
-  // Only enforce VaultPinPrompt if vault is specifically requested to upload into and is locked
-  // The user wanted VaultView to handle opening shared docs without the prompt blocking everything.
+  const saveVaultSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      await api.put(`/vault/${vaultId}/settings`, {
+        self_destruct_views: vaultSettings.self_destruct_views !== '' ? parseInt(vaultSettings.self_destruct_views, 10) : null,
+        self_destruct_at: vaultSettings.self_destruct_at ? new Date(vaultSettings.self_destruct_at).toISOString() : null,
+      });
+      alert('Vault security settings saved!');
+    } catch (err) {
+      alert('Failed to save settings: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -167,30 +190,40 @@ export default function VaultView({ vaultId }) {
         </div>
         
         {currentKey && (
-          <div className="flex flex-col sm:flex-row gap-4 border-t border-gray-700 pt-4 mt-2">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-400 mb-1">Self-destruct after N views</label>
-              <input 
-                type="number" 
-                value={uploadOptions.selfDestructViews}
-                onChange={(e) => setUploadOptions(prev => ({ ...prev, selfDestructViews: e.target.value }))}
-                className="input-field w-full py-1 text-sm field-sizing-sm" 
-                placeholder="Optional max views"
-                min="1"
-              />
+          <div className="border-t border-gray-700 pt-4 mt-2">
+            <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">Vault Security Settings</p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Self-destruct after N views</label>
+                <input
+                  type="number"
+                  value={vaultSettings.self_destruct_views}
+                  onChange={(e) => setVaultSettings(prev => ({ ...prev, self_destruct_views: e.target.value }))}
+                  className="input-field w-full py-1 text-sm"
+                  placeholder="Optional max views"
+                  min="1"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Auto-delete after date</label>
+                <input
+                  type="datetime-local"
+                  value={vaultSettings.self_destruct_at}
+                  onChange={(e) => setVaultSettings(prev => ({ ...prev, self_destruct_at: e.target.value }))}
+                  className="input-field w-full py-1 text-sm text-gray-300"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={saveVaultSettings}
+                  disabled={settingsSaving}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                >
+                  {settingsSaving ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
             </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-400 mb-1">Auto-delete after date</label>
-              <input 
-                type="datetime-local" 
-                value={uploadOptions.selfDestructDate}
-                onChange={(e) => setUploadOptions(prev => ({ ...prev, selfDestructDate: e.target.value }))}
-                className="input-field w-full py-1 text-sm field-sizing-sm text-gray-300" 
-              />
-            </div>
-            <div className="flex-1 flex text-xs text-blue-400/80 items-center px-2">
-              Values above apply to the next file selected via Upload File.
-            </div>
+            <p className="text-xs text-amber-400/70 mt-2">⚠ These settings apply to the entire vault.</p>
           </div>
         )}
       </div>
@@ -231,12 +264,17 @@ export default function VaultView({ vaultId }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setSharingDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition" title="Share Access">
-                  <Share2 className="w-4 h-4" />
+                <button onClick={() => downloadDoc(doc, false)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-green-400 transition" title="View Document">
+                  <Eye className="w-4 h-4" />
                 </button>
-                <button onClick={() => downloadDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
+                <button onClick={() => downloadDoc(doc, true)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
                   <Download className="w-4 h-4" />
                 </button>
+                {currentKey && (
+                  <button onClick={() => setSharingDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-purple-400 transition" title="Share Document">
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                )}
                 <button 
                   onClick={() => handleDeleteDoc(doc)} 
                   className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition" 

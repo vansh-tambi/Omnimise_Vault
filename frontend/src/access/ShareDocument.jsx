@@ -5,8 +5,8 @@ import {
   wrapVaultKey 
 } from '../encryption/crypto';
 
-export default function ShareDocument({ document, currentKey, onClose, onSuccess }) {
-  const [recipientEmail, setRecipientEmail] = useState('');
+export default function ShareDocument({ document, currentKey, onClose, onSuccess, prefillEmail = '' }) {
+  const [recipientEmail, setRecipientEmail] = useState(prefillEmail);
   const [maxViews, setMaxViews] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +28,7 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
         return;
       }
 
+      console.log('[ShareDocument] raw rsa_public_key (first 80 chars):', rsa_public_key?.slice(0, 80));
       const recipientPublicKey = await importPublicKeyFromBase64(rsa_public_key);
       const wrappedKey = await wrapVaultKey(currentKey, recipientPublicKey);
       
@@ -46,11 +47,11 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
       if (onSuccess) onSuccess();
       if (onClose) onClose();
     } catch(err) {
-      console.error(err);
+      console.error('[ShareDocument] Error:', err);
       if (err.response?.status === 404) {
          alert("User with that email not found.");
       } else {
-         alert('Failed to share document securely.');
+         alert('Failed to share document: ' + (err.message || 'Unknown error'));
       }
     } finally {
       setLoading(false);

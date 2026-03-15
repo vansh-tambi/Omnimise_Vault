@@ -21,6 +21,8 @@ class VaultInDB(BaseModel):
     vault_pin_hash: Optional[str] = None
     vault_pin_salt: Optional[str] = None
     created_at: Optional[datetime] = None
+    self_destruct_views: Optional[int] = None
+    self_destruct_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -33,5 +35,7 @@ class VaultResponse(BaseModel):
     vault_pin_hash: Optional[str] = None
     vault_pin_salt: Optional[str] = None
     created_at: Optional[datetime] = None
+    self_destruct_views: Optional[int] = None
+    self_destruct_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)

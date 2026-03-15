@@ -99,3 +99,46 @@ async def delete_vault(id: str, request: Request, current_user: UserResponse = D
     await log_action(db, current_user.id, "vault_deleted", request)
     return {"message": "Vault and all its documents deleted successfully"}
 
+
+from pydantic import BaseModel
+class VaultSettings(BaseModel):
+    self_destruct_views: int | None = None
+    self_destruct_at: str | None = None  # ISO datetime string or None
+
+@router.put("/{id}/settings")
+async def update_vault_settings(id: str, settings: VaultSettings, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    from bson import ObjectId
+    from datetime import datetime
+
+    try:
+        vault = await db.vaults.find_one({"_id": ObjectId(id)})
+    except Exception:
+        vault = await db.vaults.find_one({"_id": id})
+
+    if not vault:
+        raise HTTPException(status_code=404, detail="Vault not found")
+
+    if str(vault.get("user_id", "")) != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this vault")
+
+    update_fields = {}
+    if settings.self_destruct_views is not None:
+        update_fields["self_destruct_views"] = settings.self_destruct_views
+    else:
+        update_fields["self_destruct_views"] = None
+
+    if settings.self_destruct_at:
+        try:
+            update_fields["self_destruct_at"] = datetime.fromisoformat(settings.self_destruct_at.replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid datetime format for self_destruct_at")
+    else:
+        update_fields["self_destruct_at"] = None
+
+    try:
+        await db.vaults.update_one({"_id": ObjectId(id)}, {"$set": update_fields})
+    except Exception:
+        await db.vaults.update_one({"_id": id}, {"$set": update_fields})
+
+    return {"message": "Vault settings saved successfully", **update_fields}

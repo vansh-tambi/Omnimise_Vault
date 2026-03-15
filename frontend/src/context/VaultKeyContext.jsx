@@ -17,11 +17,21 @@ export function VaultKeyProvider({ children }) {
   const interactivityTimer = useRef(null);
   const navigate = useNavigate();
 
+  // One-time migration: clear any RSA key stored with the old broken export format
+  // so it gets regenerated cleanly on next vault unlock
+  useEffect(() => {
+    const KEY_VERSION = 'v2'; // bump this to force re-generation
+    const storedVersion = sessionStorage.getItem('rsa_key_version');
+    if (storedVersion !== KEY_VERSION) {
+      sessionStorage.removeItem('rsa_private_key');
+      sessionStorage.setItem('rsa_key_version', KEY_VERSION);
+    }
+  }, []);
+
   const clearKey = () => {
     setVaultKey(null);
     setRsaPrivateKey(null);
     sessionStorage.removeItem('rsa_private_key');
-    // Explicit memory dereference — key eligible for garbage collection
   };
 
   const resetInactivityTimer = () => {
