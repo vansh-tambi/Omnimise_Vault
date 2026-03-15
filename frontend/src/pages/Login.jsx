@@ -55,7 +55,7 @@ export default function Login() {
                 size="large"
                 shape="rectangular"
                 text="continue_with"
-                width="100%"
+                width="320"
                 flow="auth-code"
               />
             </div>
