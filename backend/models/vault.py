@@ -15,8 +15,8 @@ class VaultInDB(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    vault_pin_hash: str
-    vault_pin_salt: str
+    vault_pin_hash: Optional[str] = None
+    vault_pin_salt: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -27,8 +27,8 @@ class VaultResponse(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    vault_pin_hash: str
-    vault_pin_salt: str
+    vault_pin_hash: Optional[str] = None
+    vault_pin_salt: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)

@@ -18,7 +18,8 @@ def verify_google_id_token(credential: str) -> dict:
         idinfo = id_token.verify_oauth2_token(
             credential,
             google_requests.Request(),
-            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=10
         )
         return {
             "sub": idinfo["sub"],
