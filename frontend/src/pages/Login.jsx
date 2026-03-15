@@ -2,26 +2,37 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
-import { generateRSAKeyPair } from '../encryption/crypto';
+import { generateRSAKeyPair, exportPublicKeyAsBase64, exportPrivateKeyAsBase64 } from '../encryption/crypto';
 
 export default function Login() {
   const { login, isAuthenticated } = useAuth();
 
   const handleSuccess = async (response) => {
     try {
+      console.log('Google OAuth response:', response);
+      
+      // flow="auth-code" returns response.code
+      // default credential flow returns response.credential
+      const authCode = response.code || response.credential;
+      
+      if (!authCode) {
+        console.error('No auth code or credential in response', response);
+        alert('Login failed: No authorization code received.');
+        return;
+      }
+
       let publicKey = localStorage.getItem('rsa_public_key');
       let privateKey = localStorage.getItem('rsa_private_key');
       
       if (!publicKey || !privateKey) {
-        const keys = await generateRSAKeyPair();
-        publicKey = keys.publicKeyStr;
-        privateKey = keys.privateKeyStr;
+        const keyPair = await generateRSAKeyPair();
+        publicKey = await exportPublicKeyAsBase64(keyPair.publicKey);
+        privateKey = await exportPrivateKeyAsBase64(keyPair.privateKey);
         localStorage.setItem('rsa_public_key', publicKey);
         localStorage.setItem('rsa_private_key', privateKey);
       }
       
-      // response.code contains the authorization code
-      await login(response.code, publicKey);
+      await login(authCode, publicKey);
     } catch (err) {
       console.error('Login failed', err);
       alert('Login failed. Please try again.');

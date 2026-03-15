@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from integrations.google_oauth import verify_google_token_with_code
+from integrations.google_oauth import verify_google_id_token, verify_google_token_with_code
 from services.auth_service import create_access_token, verify_token
 from database.mongodb import get_database
 from models.user import UserInDB, UserResponse
@@ -11,7 +11,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 class GoogleAuthPayload(BaseModel):
-    code: str
+    code: Optional[str] = None        # auth-code flow (unused for now)
+    credential: Optional[str] = None  # JWT ID token from GoogleLogin button
     public_key: Optional[str] = None
 
 class PublicKeyRegisterPayload(BaseModel):
@@ -44,8 +45,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
 
 @router.post("/google")
 async def google_login(payload: GoogleAuthPayload):
-    # Exchange code for token and fetch profile
-    idinfo = await verify_google_token_with_code(payload.code)
+    # Determine which flow was used
+    if payload.credential:
+        # Default GoogleLogin button flow — JWT ID token
+        idinfo = verify_google_id_token(payload.credential)
+    elif payload.code:
+        # Auth-code flow
+        idinfo = await verify_google_token_with_code(payload.code)
+    else:
+        raise HTTPException(status_code=400, detail="No credential or code provided")
+
     if not idinfo:
         raise HTTPException(status_code=400, detail="Invalid Google profile data")
         
