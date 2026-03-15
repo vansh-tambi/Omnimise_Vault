@@ -75,67 +75,59 @@ export default function VaultView({ vaultId }) {
   };
 
   const downloadDoc = async (doc) => {
+    if (!currentKey) {
+      alert('Vault is locked. Enter your PIN to unlock and then download.');
+      return;
+    }
     try {
-      let keyToUse = currentKey;
+      // Get the document metadata + signed/local URL from backend
+      const res = await api.get(`documents/${doc.id}`);
+      const storageUrl = res.data.storage_url;
       
-      // If no key in context (e.g. shared document or haven't unlocked yet), try fetching access list
-      if (!keyToUse) {
-        try {
-          const accessRes = await api.get(`/access/list?document_id=${doc.id}`);
-          const specificAccess = accessRes.data.find(a => a.shared_with === user?.id);
-          
-          if (specificAccess && specificAccess.encrypted_key_for_recipient) {
-            const myPrivateKeyB64 = sessionStorage.getItem('rsa_private_key');
-            if (!myPrivateKeyB64) {
-              alert("RSA Private Key not found. Please log out and log back in, or unlock a vault to initialize keys.");
-              return;
-            }
-            const privateKeyObj = await importPrivateKeyFromBase64(myPrivateKeyB64);
-            keyToUse = await unwrapVaultKey(specificAccess.encrypted_key_for_recipient, privateKeyObj);
-          } else {
-            alert("Vault is locked! Please enter your PIN in the box above to unlock it before viewing documents.");
-            return;
-          }
-        } catch (e) {
-            alert("Vault is locked! Please enter your PIN in the box above to unlock it before downloading documents.");
-            return;
-        }
+      // Fetch the encrypted file — use authenticated api if local, plain fetch if signed (GCS)
+      let encryptedBuffer;
+      if (storageUrl.startsWith('http://localhost')) {
+        // Local storage: needs auth header, use api
+        const fileRes = await api.get(storageUrl, { responseType: 'arraybuffer' });
+        encryptedBuffer = fileRes.data;
+      } else {
+        // Signed GCS URL: already has auth embedded
+        const fileRes = await fetch(storageUrl);
+        if (!fileRes.ok) throw new Error(`File fetch failed: ${fileRes.status}`);
+        encryptedBuffer = await fileRes.arrayBuffer();
       }
-
-      const res = await api.get(`/documents/${doc.id}`);
       
-      // Fetch encrypted blob
-      const fileRes = await fetch(res.data.storage_url);
-      const encryptedBuffer = await fileRes.arrayBuffer();
-      
-      // Extract IV (first 12 bytes)
-      const iv = encryptedBuffer.slice(0, 12);
+      // Extract IV (first 12 bytes) then ciphertext
+      const iv = new Uint8Array(encryptedBuffer.slice(0, 12));
       const data = encryptedBuffer.slice(12);
       
-      // Decrypt
-      const decrypted = await decryptFile(data, new Uint8Array(iv), keyToUse);
+      // Decrypt using vault key
+      const decrypted = await decryptFile(data, iv, currentKey);
       
+      // Integrity check
       const computedHash = await hashFile(decrypted);
       if (doc.file_hash && computedHash !== doc.file_hash) {
-        alert("Integrity check failed. This file may have been tampered with and has not been downloaded.");
+        alert('Integrity check failed. This file may have been tampered with.');
         return;
       }
       
-      // Download 
-      const blob = new Blob([decrypted], { type: doc.content_type });
+      // Trigger download
+      const blob = new Blob([decrypted], { type: doc.content_type || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = doc.filename;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
+      console.error('Download failed:', err);
       if (err.response?.status === 410) {
-        alert("This document no longer exists. It was permanently destroyed as configured.");
+        alert('This document was permanently destroyed as configured.');
         setDocuments(prev => prev.filter(d => d.id !== doc.id));
       } else {
-        alert("Failed to decrypt or retrieve document. Make sure you unlocked the vault or have valid shared access.");
+        alert('Download failed: ' + (err.response?.data?.detail || err.message));
       }
     }
   };
@@ -146,7 +138,7 @@ export default function VaultView({ vaultId }) {
     }
     
     try {
-      await api.delete(`/documents/${doc.id}`);
+      await api.delete(`documents/${doc.id}`);
       setDocuments(prev => prev.filter(d => d.id !== doc.id));
     } catch (err) {
       console.error("Failed to delete document", err);
@@ -209,7 +201,13 @@ export default function VaultView({ vaultId }) {
          </div>
       )}
 
-      {loading ? (
+      {!currentKey ? (
+        <div className="card text-center p-16 border-dashed border-2 border-gray-700">
+          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-medium text-white mb-2">Documents Hidden</h3>
+          <p className="text-gray-400 max-w-sm mx-auto">Enter your vault PIN above to unlock and view your documents.</p>
+        </div>
+      ) : loading ? (
         <div className="text-center p-12 text-gray-400">Loading your secure documents...</div>
       ) : documents.length === 0 ? (
         <div className="card text-center p-16 border-dashed border-2">
@@ -226,11 +224,9 @@ export default function VaultView({ vaultId }) {
                   <FileText className="w-6 h-6" />
                 </div>
                 <div className="truncate pr-4">
-                  <p className="font-medium text-gray-200 truncate">
-                    {currentKey ? doc.filename : `Encrypted Document (${doc.id.slice(-4)})`}
-                  </p>
+                  <p className="font-medium text-gray-200 truncate">{doc.filename}</p>
                   <p className="text-xs text-gray-500 capitalize">
-                    {currentKey ? `${doc.content_type.split('/')[1] || doc.content_type} • ${(doc.size_bytes / 1024).toFixed(1)} KB` : "Locked Format"}
+                    {doc.content_type.split('/')[1] || doc.content_type} • {(doc.size_bytes / 1024).toFixed(1)} KB
                   </p>
                 </div>
               </div>
@@ -241,15 +237,13 @@ export default function VaultView({ vaultId }) {
                 <button onClick={() => downloadDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
                   <Download className="w-4 h-4" />
                 </button>
-                {currentKey && (
-                  <button 
-                    onClick={() => handleDeleteDoc(doc)} 
-                    className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition" 
-                    title="Delete Document"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                <button 
+                  onClick={() => handleDeleteDoc(doc)} 
+                  className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition" 
+                  title="Delete Document"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}

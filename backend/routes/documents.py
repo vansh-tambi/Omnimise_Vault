@@ -17,6 +17,8 @@ async def upload_file(
     vault_id: str = Form(...),
     file: UploadFile = File(...),
     file_hash: str = Form(None),
+    self_destruct_after_views: int = Form(None),
+    self_destruct_at: str = Form(None),
     current_user: UserResponse = Depends(get_current_user)
 ):
     has_access = await check_vault_access(vault_id, current_user.id)
@@ -35,8 +37,16 @@ async def upload_file(
         
     file_bytes = await file.read()
     size_bytes = len(file_bytes)
-    # Uploading just the path using the owner's ID
     storage_path = await upload_document(file_bytes, current_user.id, file.filename)
+    
+    # Parse self_destruct_at as datetime if provided
+    parsed_self_destruct_at = None
+    if self_destruct_at:
+        from datetime import datetime
+        try:
+            parsed_self_destruct_at = datetime.fromisoformat(self_destruct_at.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_self_destruct_at = None
     
     doc_create = DocumentCreate(
         filename=file.filename,
@@ -44,7 +54,9 @@ async def upload_file(
         content_type=file.content_type,
         size_bytes=size_bytes,
         storage_url=storage_path,
-        file_hash=file_hash
+        file_hash=file_hash,
+        self_destruct_after_views=self_destruct_after_views,
+        self_destruct_at=parsed_self_destruct_at
     )
     
     created_doc = await create_document(doc_create, current_user.id)
@@ -54,6 +66,7 @@ async def upload_file(
     await log_action(db, current_user.id, "file_uploaded", request, document_id=created_doc.id)
     
     return created_doc
+
 
 @router.get("", response_model=List[DocumentResponse])
 async def list_documents(vault_id: str, current_user: UserResponse = Depends(get_current_user)):

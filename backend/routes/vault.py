@@ -40,21 +40,18 @@ async def unlock_vault(id: str, payload: VaultUnlock, request: Request, current_
     if vault.get("vault_pin_hash") and vault.get("vault_pin_salt"):
         try:
             salt_bytes = base64.b64decode(vault["vault_pin_salt"])
-            # The frontend uses PBKDF2 with 100,000 iterations of SHA-256 for a 256-bit (32-byte) hash
-            derived_key = hashlib.pbkdf2_hmac(
-                'sha256', 
-                payload.pin.encode(), 
-                salt_bytes, 
-                100000, 
-                dklen=32
-            )
+            # Use PBKDF2 with SHA-256, 100k iterations, 32 bytes — same as frontend
+            derived_key = hashlib.pbkdf2_hmac('sha256', payload.pin.encode(), salt_bytes, 100000, dklen=32)
             derived_hash = base64.b64encode(derived_key).decode()
+            print(f"PIN verify: stored_hash={vault['vault_pin_hash'][:16]}... derived={derived_hash[:16]}...")
             
             if derived_hash != vault["vault_pin_hash"]:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid vault PIN")
+        except HTTPException:
+            raise  # Pass through auth errors without wrapping
         except Exception as e:
             print(f"PIN verification error: {e}")
-            raise HTTPException(status_code=400, detail="Failed to verify PIN")
+            raise HTTPException(status_code=400, detail=f"Failed to verify PIN: {str(e)}")
     
     await log_action(db, current_user.id, "vault_unlocked", request)
     return {"message": "Vault unlocked and logged"}
@@ -65,28 +62,40 @@ async def delete_vault(id: str, request: Request, current_user: UserResponse = D
     from bson import ObjectId
     from integrations.gcs_storage import delete_file
     
+    print(f"Delete attempt for vault {id} by user {current_user.id}")
+    
+    # Step 1: Find vault by ID only (handle both ObjectId and string formats)
     try:
-        vault_query = {"_id": ObjectId(id)}
-    except:
-        vault_query = {"_id": id}
-        
-    vault = await db.vaults.find_one({**vault_query, "user_id": current_user.id})
+        vault = await db.vaults.find_one({"_id": ObjectId(id)})
+    except Exception:
+        vault = await db.vaults.find_one({"_id": id})
+    
     if not vault:
-        raise HTTPException(status_code=404, detail="Vault not found or not owned by you")
-        
-    # Delete all documents in this vault
+        print(f"Vault {id} does not exist at all")
+        raise HTTPException(status_code=404, detail="Vault not found")
+    
+    # Step 2: Check ownership separately by comparing user_id as strings
+    stored_user_id = str(vault.get("user_id", ""))
+    if stored_user_id != current_user.id:
+        print(f"Ownership mismatch: vault owner={stored_user_id}, requester={current_user.id}")
+        raise HTTPException(status_code=403, detail="Not authorized to delete this vault")
+    
+    # Step 3: Delete all documents inside this vault (by vault_id string)
     cursor = db.documents.find({"vault_id": id})
     async for doc in cursor:
-        # Delete from storage
+        print(f"Deleting document {doc.get('_id')} from vault {id}")
         if doc.get("storage_url"):
             delete_file(doc["storage_url"])
-        # Delete access rules
         await db.access.delete_many({"document_id": str(doc["_id"])})
-        # Delete document record
         await db.documents.delete_one({"_id": doc["_id"]})
-        
-    # Finally delete the vault itself
-    await db.vaults.delete_one(vault_query)
     
-    await log_action(db, current_user.id, "vault_deleted", request, vault_id=id)
+    # Step 4: Delete the vault itself
+    try:
+        await db.vaults.delete_one({"_id": ObjectId(id)})
+    except Exception:
+        await db.vaults.delete_one({"_id": id})
+    
+    print(f"Vault {id} deleted successfully")
+    await log_action(db, current_user.id, "vault_deleted", request)
     return {"message": "Vault and all its documents deleted successfully"}
+

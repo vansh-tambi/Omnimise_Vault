@@ -7,7 +7,7 @@ import os
 from contextlib import asynccontextmanager
 from database.mongodb import connect_to_mongo, close_mongo_connection
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi import Request
 from routes import auth, vault, documents, requests, access, messages, audit
 from integrations import digilocker
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -47,6 +47,25 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
 
 app = FastAPI(title="Secure Document Vault", lifespan=lifespan)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # Collapse multiple slashes (e.g., //vault -> /vault)
+    import re
+    path = request.url.path
+    collapsed_path = re.sub(r'/+', '/', path)
+    
+    if path != collapsed_path:
+        print(f"Collapsing slashes: {path} -> {collapsed_path}")
+        # Note: We can't easily change the request.url in-place for all downstream 
+        # but we can log it. Actually, we should handle this via a redirect or 
+        # by modifying the scope if we want FastAPI to match the route.
+        # But for now, let's see if this is actually the issue.
+    
+    print(f"Incoming request: {request.method} {path}")
+    response = await call_next(request)
+    print(f"Response status: {response.status_code}")
+    return response
 
 _frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(

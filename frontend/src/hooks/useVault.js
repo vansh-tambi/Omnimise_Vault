@@ -24,9 +24,10 @@ export function useVault() {
     try {
       // Generate a new random salt for this vault's PIN
       const saltRaw = crypto.getRandomValues(new Uint8Array(16));
-      const salt = Array.from(saltRaw).map(b => b.toString(16).padStart(2, '0')).join('');
+      // Encode salt as base64 (matching Python's base64.b64decode on the backend)
+      const saltB64 = btoa(String.fromCharCode(...saltRaw));
       
-      // Hash the PIN locally
+      // Hash the PIN locally using same algorithm as backend (PBKDF2 → base64)
       const { hashPIN } = await import('../encryption/crypto.js');
       const vault_pin_hash = await hashPIN(pin, saltRaw);
 
@@ -34,7 +35,7 @@ export function useVault() {
         name, 
         description,
         vault_pin_hash,
-        vault_pin_salt: salt // Send salt hex string
+        vault_pin_salt: saltB64 // Send salt as base64
       });
       
       setVaults(prev => [...prev, res.data]);

@@ -28,12 +28,23 @@ export async function deriveKey(pin, salt) {
   )
 }
 
-export async function hashPIN(pin, salt) {
-  // First derive the key as above, then export it to base64 to store in DB
-  const aesKey = await deriveKey(pin, salt);
-  const rawKey = await crypto.subtle.exportKey("raw", aesKey);
-  const hashArray = Array.from(new Uint8Array(rawKey));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+export async function hashPIN(pin, saltBytes) {
+  // Use the same algorithm as backend: PBKDF2-SHA256 100k iterations, 32 bytes, exported as base64
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(pin),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    256 // 32 bytes
+  );
+  // Encode to base64 — same as what Python's base64.b64encode produces
+  return btoa(String.fromCharCode(...new Uint8Array(derivedBits)));
 }
 
 export async function generateRSAKeyPair() {
@@ -60,7 +71,12 @@ export async function exportPrivateKeyAsBase64(privateKey) {
 }
 
 export async function importPublicKeyFromBase64(base64String) {
-  const binaryDerString = atob(base64String);
+  // Normalize base64url to standard base64 (replace - with +, _ with /) and add padding
+  const normalized = base64String
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(base64String.length / 4) * 4, '=');
+  const binaryDerString = atob(normalized);
   const binaryDer = new Uint8Array(binaryDerString.length);
   for (let i = 0; i < binaryDerString.length; i++) {
     binaryDer[i] = binaryDerString.charCodeAt(i);
@@ -75,7 +91,12 @@ export async function importPublicKeyFromBase64(base64String) {
 }
 
 export async function importPrivateKeyFromBase64(base64String) {
-  const binaryDerString = atob(base64String);
+  // Normalize base64url to standard base64
+  const normalized = base64String
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(base64String.length / 4) * 4, '=');
+  const binaryDerString = atob(normalized);
   const binaryDer = new Uint8Array(binaryDerString.length);
   for (let i = 0; i < binaryDerString.length; i++) {
     binaryDer[i] = binaryDerString.charCodeAt(i);

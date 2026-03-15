@@ -12,7 +12,7 @@ export default function VaultCard({ vault, onDeleted }) {
     }
     
     try {
-      await api.delete(`/vault/${vault.id}`);
+      await api.delete(`vault/${vault.id}`);
       if (onDeleted) onDeleted(vault.id);
     } catch (err) {
       console.error("Failed to delete vault", err);
