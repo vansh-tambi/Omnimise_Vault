@@ -58,3 +58,35 @@ async def unlock_vault(id: str, payload: VaultUnlock, request: Request, current_
     
     await log_action(db, current_user.id, "vault_unlocked", request)
     return {"message": "Vault unlocked and logged"}
+
+@router.delete("/{id}")
+async def delete_vault(id: str, request: Request, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    from bson import ObjectId
+    from integrations.gcs_storage import delete_file
+    
+    try:
+        vault_query = {"_id": ObjectId(id)}
+    except:
+        vault_query = {"_id": id}
+        
+    vault = await db.vaults.find_one({**vault_query, "user_id": current_user.id})
+    if not vault:
+        raise HTTPException(status_code=404, detail="Vault not found or not owned by you")
+        
+    # Delete all documents in this vault
+    cursor = db.documents.find({"vault_id": id})
+    async for doc in cursor:
+        # Delete from storage
+        if doc.get("storage_url"):
+            delete_file(doc["storage_url"])
+        # Delete access rules
+        await db.access.delete_many({"document_id": str(doc["_id"])})
+        # Delete document record
+        await db.documents.delete_one({"_id": doc["_id"]})
+        
+    # Finally delete the vault itself
+    await db.vaults.delete_one(vault_query)
+    
+    await log_action(db, current_user.id, "vault_deleted", request, vault_id=id)
+    return {"message": "Vault and all its documents deleted successfully"}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Share2, ShieldAlert } from 'lucide-react';
+import { FileText, Download, Share2, ShieldAlert, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
 import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey, hashFile } from '../encryption/crypto';
@@ -140,6 +140,20 @@ export default function VaultView({ vaultId }) {
     }
   };
 
+  const handleDeleteDoc = async (doc) => {
+    if (!window.confirm(`Are you sure you want to delete "${doc.filename}"?`)) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/documents/${doc.id}`);
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+    } catch (err) {
+      console.error("Failed to delete document", err);
+      alert("Failed to delete document. Please try again.");
+    }
+  };
+
   const handleCloseShare = () => {
     setSharingDoc(null);
   };
@@ -227,6 +241,15 @@ export default function VaultView({ vaultId }) {
                 <button onClick={() => downloadDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
                   <Download className="w-4 h-4" />
                 </button>
+                {currentKey && (
+                  <button 
+                    onClick={() => handleDeleteDoc(doc)} 
+                    className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition" 
+                    title="Delete Document"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -75,3 +75,24 @@ def generate_signed_url(blob_path: str, expiry_minutes: int = 15) -> str:
         expiration=timedelta(minutes=expiry_minutes), 
         version="v4"
     )
+
+def delete_file(storage_url: str):
+    if not GCS_ENABLED:
+        try:
+            local_path = os.path.join(LOCAL_STORAGE_DIR, storage_url)
+            if os.path.exists(local_path):
+                os.remove(local_path)
+            return True
+        except Exception as e:
+            print(f"Local delete error: {e}")
+            return False
+            
+    try:
+        client = get_gcs_client()
+        bucket = client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(storage_url)
+        blob.delete()
+        return True
+    except Exception as e:
+        print(f"GCS delete error: {e}")
+        return False
