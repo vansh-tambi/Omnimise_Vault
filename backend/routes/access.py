@@ -70,8 +70,42 @@ async def list_access(document_id: str, current_user: UserResponse = Depends(get
         if document.get("shared_with") == current_user.id:
             expires_at = document.get("expires_at")
             if expires_at and expires_at <= datetime.utcnow():
-                raise HTTPException(status_code=403, detail="Access has expired")
+                continue # Skip expired access
                 
         document["_id"] = str(document["_id"])
         acts.append(AccessInDB(**document))
     return acts
+
+@router.get("/received")
+async def list_received_shares(current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    from datetime import datetime
+    from bson import ObjectId
+    
+    cursor = db.access.find({
+        "shared_with": current_user.id,
+        "$or": [
+            {"expires_at": {"$gt": datetime.utcnow()}},
+            {"expires_at": None}
+        ]
+    })
+    
+    results = []
+    async for share in cursor:
+        doc_id = share["document_id"]
+        try:
+            doc = await db.documents.find_one({"_id": ObjectId(doc_id)})
+        except:
+            doc = await db.documents.find_one({"_id": doc_id})
+            
+        if doc:
+            results.append({
+                "access_id": str(share["_id"]),
+                "document_id": doc_id,
+                "filename": doc["filename"],
+                "owner_id": share["owner_id"],
+                "granted_at": share["granted_at"],
+                "expires_at": share.get("expires_at"),
+                "encrypted_key_for_recipient": share["encrypted_key_for_recipient"]
+            })
+    return results

@@ -7,7 +7,7 @@ export default function Navbar() {
   const navigate = useNavigate();
 
   return (
-    <nav className="h-16 border-b border-gray-700 bg-dark-bg flex items-center justify-between px-6 sticky top-0 z-50">
+    <nav className="h-16 w-full flex-shrink-0 border-b border-gray-700 bg-dark-bg flex items-center justify-between px-6 sticky top-0 z-50">
       <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition">
         <Shield className="w-8 h-8 text-dark-accent" />
         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">

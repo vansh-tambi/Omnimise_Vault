@@ -10,6 +10,9 @@ class VaultCreate(BaseModel):
     vault_pin_salt: str
 
 
+class VaultUnlock(BaseModel):
+    pin: str
+
 class VaultInDB(BaseModel):
     id: Optional[str] = None
     user_id: str

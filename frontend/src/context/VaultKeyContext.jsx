@@ -7,6 +7,7 @@ import {
   exportPrivateKeyAsBase64,
   importPrivateKeyFromBase64
 } from '../encryption/crypto';
+import api from '../services/api';
 
 const VaultKeyContext = createContext();
 
@@ -47,7 +48,10 @@ export function VaultKeyProvider({ children }) {
     }
   }, [vaultKey]);
 
-  const unlockVault = async (vaultId, pin, authToken) => {
+  const unlockVault = async (vaultId, pin) => {
+    // 1. Verify PIN with backend
+    await api.post(`/vault/${vaultId}/unlock`, { pin });
+
     const enc = new TextEncoder();
     const salt = enc.encode(vaultId);
     

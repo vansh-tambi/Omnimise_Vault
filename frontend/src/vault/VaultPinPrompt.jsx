@@ -14,8 +14,7 @@ export default function VaultPinPrompt({ vaultId, onKeyDerived }) {
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
-      const key = await unlockVault(vaultId, pin, token);
+      const key = await unlockVault(vaultId, pin);
       onKeyDerived(key);
     } catch (err) {
       console.error(err);

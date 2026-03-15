@@ -21,9 +21,9 @@ export default function Requests() {
     }
   };
 
-  const handleResponse = async (id, status) => {
+  const handleResponse = async (id, action) => {
     try {
-      await api.post('/requests/respond', { request_id: id, status });
+      await api.post('/requests/respond', { request_id: id, action });
       fetchRequests();
     } catch (err) {
       alert("Failed to respond");
