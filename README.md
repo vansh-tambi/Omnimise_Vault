@@ -11,9 +11,11 @@ This zero-knowledge mandate is achieved by executing all sensitive cryptographic
 The system utilizes a decoupled frontend and backend architecture linked via a secure RESTful API. 
 
 1. **Frontend (React SPA)**: Operates entirely in the user's browser. It intercepts file uploads, generates unique cryptographic nonces (Initialization Vectors), encrypts the raw binary streams, and dispatches the ciphertext to the backend API. Upon retrieval, it reverses the process, decrypting the ciphertext entirely within local memory before surfacing the file to the user.
-2. **Backend (FastAPI)**: Acts as an unprivileged broker. It validates user identity via JWTs, enforces strict access control matrices stored in MongoDB, and orchestrates the arbitrary binary blobs into Google Cloud Storage (GCS). It never possesses the cryptographic keys.
-3. **Database (MongoDB)**: Stores relationships, access permissions, temporal session metadata, and pointers to the GCS blobs. It retains the user's encrypted RSA public keys for document sharing scenarios but is blinded to the actual file contents.
-4. **Storage (Google Cloud Storage)**: Acts as the encrypted, infinitely scalable data lake housing the raw ciphertexts.
+2. **Backend (FastAPI)**: Acts as an unprivileged broker. It validates user identity via JWTs, enforces strict access control matrices stored in MongoDB, and orchestrates the arbitrary binary blobs into Google Cloud Storage (GCS) or a secure Local File Storage fallback. It never possesses the cryptographic keys.
+3. **Database (MongoDB)**: Stores relationships, access permissions, temporal session metadata, and pointers to the storage blobs. It retains the user's encrypted RSA public keys for document sharing scenarios but is blinded to the actual file contents.
+4. **Cloud Storage (Google Cloud Storage)**: Acts as the encrypted, highly durable data lake housing the raw ciphertexts (when `GCS_ENABLED=true`).
+5. **Local Storage Fallback**: A local `backend/local_storage` directory that acts as a secure container for encrypted documents during local development or when cloud billing is inactive (when `GCS_ENABLED=false`).
+6. **Background Tasks**: An embedded APScheduler cron service runs daily at midnight to execute completely automated ZIP backups of users' encrypted vaults into their connected Google Drive accounts.
 
 ## Technology Stack
 
@@ -22,7 +24,9 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 | **Frontend** | React, Vite, Tailwind CSS | High-performance SPA with styling. |
 | **Backend** | Python, FastAPI, Uvicorn | Asynchronous, type-safe REST API server. |
 | **Database** | MongoDB (Motor Driver) | NoSQL document store for metadata and access schemas. |
-| **Storage** | Google Cloud Storage | Highly durable object storage backend for encrypted blobs. |
+| **Cloud Storage** | Google Cloud Storage | Highly durable object storage backend for encrypted blobs. |
+| **Local Storage** | Python OS/Pathlib | Fallback local file system driver for development environments. |
+| **Background Tasks** | APScheduler | Embedding async cron scheduler for Google Drive syncs. |
 | **Authentication** | Google OAuth, Python-Jose | Identity federation merged with strict session JWT issuance. |
 
 ## Local Development Setup
@@ -58,6 +62,7 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 *   `GOOGLE_CLIENT_ID`: OAuth 2.0 Client ID from GCP Console.
 *   `GOOGLE_CLIENT_SECRET`: OAuth 2.0 Client Secret from GCP Console.
 *   `GOOGLE_REDIRECT_URI`: OAuth redirect target (default: `postmessage` for frontend callback handling).
+*   `GCS_ENABLED`: Feature toggle flag to switch between native GCS (true) and Local File Storage limits (false).
 *   `GCS_BUCKET_NAME`: Target Google Cloud Storage bucket name.
 *   `GCS_SERVICE_ACCOUNT_JSON`: Path to the GCP Service Account credentials JSON file.
 *   `FRONTEND_URL`: URL of the React application for rigorous CORS enforcement.
@@ -87,9 +92,10 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 ### Documents
 | Method | Path | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| POST | `/documents/upload` | Yes | Accepts AES-encrypted multipart blob and uploads to GCS via proxy. |
+| POST | `/documents/upload` | Yes | Accepts AES-encrypted multipart blob and uploads to active storage provider. |
 | GET | `/documents` | Yes | Lists metadata of documents within a specified authorized vault. |
-| GET | `/documents/{id}` | Yes | Retrieves temporary, 15-minute V4 signed URL for secure GCS downloading. |
+| GET | `/documents/{id}` | Yes | Retrieves temporary, 15-minute V4 signed URL for secure GCS downloading, or a proxied local endpoint URL. |
+| GET | `/local-files/{path}` | Yes | Secure proxy for serving encrypted binary blobs from the local filesystem during `GCS_ENABLED=false` development periods. Path traversal prevented via User ID validation. |
 
 ### Requests
 | Method | Path | Auth Required | Description |
@@ -112,7 +118,7 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 ### Integrations
 | Method | Path | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| POST | `/backup/trigger` | Yes | Manually forces an in-memory ZIP aggregation and Google Drive backup of entire vault. |
+| POST | `/backup/trigger` | Yes | Manually forces an in-memory ZIP aggregation and Google Drive backup of entire vault asynchronously. |
 | GET | `/digilocker/auth` | Yes | Initiates the DigiLocker OAuth integration pipeline. |
 | GET | `/digilocker/import/{uri}` | Yes | Streams raw DigiLocker document bytes securely to the frontend for algorithmic encryption. |
 
@@ -125,6 +131,7 @@ The foundation of the platform's security is its integration of various modern c
 *   **AES-GCM-256 Symmetric Encryption**: Documents are encrypted utilizing military-grade AES with a 256-bit key length and a Galois/Counter Mode (GCM) layout, guaranteeing both absolute confidentiality and ciphertext authenticity (tamper evidence).
 *   **In-Memory Lifecycle**: The derived AES keys are housed purely in transient React Component state natively governed by the JavaScript garbage collector. Keys do not persist in `localStorage`, `sessionStorage`, or indexed DB structures, terminating immediately upon a page refresh or explicit browser session closure.
 *   **Asymmetric Key Wrapping**: Document sharing avoids central key escrow by utilizing 2048-bit RSA-OAEP schemas. The sender's client wraps the symmetric vault key specifically for the recipient's public key mathematically, requiring the recipient's locally stored private key to decrypt traversing through the server.
+*   **Storage Abstraction Layer**: By separating the metadata pointers from the physical ciphertext blobs, the system gracefully handles dynamic switching between Google Cloud Storage and strict local development silos ensuring rapid local iterating.
 *   **Signed URLs**: The backend provisions heavily restricted, 15-minute time-to-live signed Google Cloud Storage endpoint URLs dynamically, deprecating permanent public exposure of blob locations.
 *   **JWT Authorization**: API perimeter defenses evaluate short-lived JSON Web Tokens signed by the backend framework incorporating explicit identity claims evaluated prior to any database operation.
 
