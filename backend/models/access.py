@@ -15,12 +15,14 @@ class AccessCreate(AccessBase):
     pass
 
 class AccessInDB(AccessBase):
-    id: str = Field(alias="_id", default=None)
+    id: Optional[str] = None
     owner_id: str
-    granted_at: datetime = Field(default_factory=datetime.utcnow)
+    granted_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
-class AccessResponse(AccessInDB):
+class AccessResponse(AccessBase):
     id: str
+    owner_id: str
+    granted_at: Optional[datetime] = None
     model_config = ConfigDict(populate_by_name=True)

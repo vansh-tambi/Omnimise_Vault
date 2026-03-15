@@ -1,23 +1,34 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
-class VaultBase(BaseModel):
+
+class VaultCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    vault_pin_hash: Optional[str] = None # Added for user's schema requirement
+    vault_pin_hash: str
+    vault_pin_salt: str
 
-class VaultCreate(VaultBase):
-    pass
 
-class VaultInDB(VaultBase):
-    id: str = Field(alias="_id", default=None)
-    user_id: str # Changed from owner_id to user_id for exact match
-    vault_pin_hash: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+class VaultInDB(BaseModel):
+    id: Optional[str] = None
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    vault_pin_hash: str
+    vault_pin_salt: str
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
-class VaultResponse(VaultInDB):
+
+class VaultResponse(BaseModel):
     id: str
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    vault_pin_hash: str
+    vault_pin_salt: str
+    created_at: Optional[datetime] = None
+
     model_config = ConfigDict(populate_by_name=True)

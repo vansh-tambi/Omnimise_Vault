@@ -5,17 +5,14 @@ from typing import List
 
 async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
     db = get_database()
+    from datetime import datetime
     vault_dict = vault_data.model_dump()
     vault_dict["user_id"] = user_id
-    
-    vault_db = VaultInDB(**vault_dict)
-    vault_db_dict = vault_db.model_dump(by_alias=True, exclude_none=True)
-    if "_id" in vault_db_dict:
-        del vault_db_dict["_id"]
-        
-    result = await db.vaults.insert_one(vault_db_dict)
-    vault_db_dict["id"] = str(result.inserted_id)
-    return VaultInDB(**vault_db_dict)
+    vault_dict["created_at"] = datetime.utcnow()
+
+    result = await db.vaults.insert_one(vault_dict)
+    vault_dict["id"] = str(result.inserted_id)
+    return VaultInDB(**vault_dict)
 
 async def get_user_vaults(user_id: str) -> List[VaultInDB]:
     db = get_database()

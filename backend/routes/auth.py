@@ -73,18 +73,15 @@ async def google_login(payload: GoogleAuthPayload):
     db = get_database()
     user_dict = await db.users.find_one({"google_id": google_id})
     if not user_dict:
-        # Create user
-        new_user = UserInDB(
-            google_id=google_id,
-            email=email,
-            name=name,
-            picture=picture,
-            rsa_public_key=payload.public_key
-        )
-        new_user_dict = new_user.model_dump(by_alias=True, exclude_none=True)
-        if "_id" in new_user_dict:
-            del new_user_dict["_id"]
-            
+        from datetime import datetime
+        new_user_dict = {
+            "google_id": google_id,
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "rsa_public_key": payload.public_key,
+            "created_at": datetime.utcnow()
+        }
         result = await db.users.insert_one(new_user_dict)
         user_id = str(result.inserted_id)
     else:

@@ -5,17 +5,25 @@ import { Plus } from 'lucide-react';
 export default function VaultCreate({ onCreated }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const { createVault, loading } = useVault();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !pin.trim()) return;
+    if (pin !== confirmPin) {
+      alert("PINs do not match!");
+      return;
+    }
     try {
-      const newVault = await createVault(name, description);
+      const newVault = await createVault(name, description, pin);
       setIsOpen(false);
       setName('');
       setDescription('');
+      setPin('');
+      setConfirmPin('');
       if (onCreated) onCreated(newVault);
     } catch (error) {
       console.error(error);
@@ -54,11 +62,37 @@ export default function VaultCreate({ onCreated }) {
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
           <textarea 
-            className="input-field min-h-[80px]" 
+            className="input-field min-h-[50px]" 
             placeholder="Optional purpose description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={loading}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Master PIN *</label>
+          <input 
+            type="password" 
+            className="input-field" 
+            placeholder="Choose a PIN to secure this vault"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            disabled={loading}
+            required
+            minLength={4}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Confirm PIN *</label>
+          <input 
+            type="password" 
+            className="input-field" 
+            placeholder="Confirm your Master PIN"
+            value={confirmPin}
+            onChange={(e) => setConfirmPin(e.target.value)}
+            disabled={loading}
+            required
+            minLength={4}
           />
         </div>
         <div className="flex justify-end gap-3 mt-2">

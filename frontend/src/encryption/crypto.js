@@ -28,6 +28,14 @@ export async function deriveKey(pin, salt) {
   )
 }
 
+export async function hashPIN(pin, salt) {
+  // First derive the key as above, then export it to base64 to store in DB
+  const aesKey = await deriveKey(pin, salt);
+  const rawKey = await crypto.subtle.exportKey("raw", aesKey);
+  const hashArray = Array.from(new Uint8Array(rawKey));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export async function generateRSAKeyPair() {
   return await crypto.subtle.generateKey(
     {

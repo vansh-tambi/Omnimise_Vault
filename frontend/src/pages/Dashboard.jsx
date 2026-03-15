@@ -45,10 +45,10 @@ export default function Dashboard() {
     setBackupMessage(null);
     try {
       await api.post('/backup/trigger');
-      setBackupMessage({ type: 'success', text: 'Vault backup uploaded to your Google Drive successfully' });
+      setBackupMessage({ type: 'success', text: 'Backup successful! Files are saved in the "Omnimise Vault Backups" folder in your Google Drive root directory.' });
     } catch (err) {
       console.error("Backup failed", err);
-      setBackupMessage({ type: 'error', text: 'Backup failed. Please try again or check your Google Drive connection' });
+      setBackupMessage({ type: 'error', text: 'Backup failed. Please try again or check your Google Drive connection.' });
     } finally {
       setBackupLoading(false);
     }

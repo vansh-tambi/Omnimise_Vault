@@ -27,6 +27,7 @@ def verify_google_id_token(credential: str) -> dict:
             "picture": idinfo.get("picture"),
         }
     except ValueError as e:
+        print(f"GOOGLE OAUTH ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Invalid Google ID token: {str(e)}")
 
 

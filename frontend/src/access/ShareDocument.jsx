@@ -6,21 +6,29 @@ import {
 } from '../encryption/crypto';
 
 export default function ShareDocument({ document, currentKey, onClose, onSuccess }) {
-  const [recipientId, setRecipientId] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
   const [maxViews, setMaxViews] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [loading, setLoading] = useState(false);
 
   const executeShare = async () => {
-    if (!recipientId || !document || !currentKey) {
-      alert("Cannot share: Missing recipient ID or Vault is locked (Unlock it first to wrap the key).");
+    if (!recipientEmail || !document || !currentKey) {
+      alert("Cannot share: Missing recipient email or Vault is locked.");
       return;
     }
     setLoading(true);
     try {
-      const pubKeyRes = await api.get(`/auth/users/${recipientId}/public-key`);
-      
-      const recipientPublicKey = await importPublicKeyFromBase64(pubKeyRes.data.rsa_public_key);
+      // Lookup the user by email to get their ID and RSA Public Key
+      const userRes = await api.get(`/access/lookup_user?email=${encodeURIComponent(recipientEmail)}`);
+      const { id: recipientId, rsa_public_key } = userRes.data;
+
+      if (!rsa_public_key) {
+        alert("This user has not initialized their RSA keys. They need to log in and unlock a vault first.");
+        setLoading(false);
+        return;
+      }
+
+      const recipientPublicKey = await importPublicKeyFromBase64(rsa_public_key);
       const wrappedKey = await wrapVaultKey(currentKey, recipientPublicKey);
       
       const payload = {
@@ -39,7 +47,11 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
       if (onClose) onClose();
     } catch(err) {
       console.error(err);
-      alert('Failed to share document securely.');
+      if (err.response?.status === 404) {
+         alert("User with that email not found.");
+      } else {
+         alert('Failed to share document securely.');
+      }
     } finally {
       setLoading(false);
     }
@@ -53,13 +65,13 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient User ID</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient Email</label>
             <input 
-              type="text" 
-              value={recipientId}
-              onChange={(e) => setRecipientId(e.target.value)}
+              type="email" 
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
               className="input-field w-full" 
-              placeholder="Paste user ID here..."
+              placeholder="e.g. colleague@company.com"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -91,7 +103,7 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
         
         <div className="flex justify-end gap-3 mt-6">
           <button disabled={loading} onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition">Cancel</button>
-          <button disabled={loading || !recipientId} onClick={executeShare} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg shadow-blue-500/20">
+          <button disabled={loading || !recipientEmail} onClick={executeShare} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg shadow-blue-500/20">
             {loading ? 'Sharing...' : 'Share Key'}
           </button>
         </div>

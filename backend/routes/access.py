@@ -31,17 +31,31 @@ async def share_access(acc: AccessCreate, request: Request, current_user: UserRe
     if not vault:
         raise HTTPException(status_code=403, detail="Must own document's vault to share it")
         
-    acc_db = AccessInDB(**acc.model_dump(), owner_id=current_user.id)
-    acc_db_dict = acc_db.model_dump(by_alias=True, exclude_none=True)
-    if "_id" in acc_db_dict:
-        del acc_db_dict["_id"]
-        
-    result = await db.access.insert_one(acc_db_dict)
-    acc_db.id = str(result.inserted_id)
+    from datetime import datetime
+    acc_dict = acc.model_dump()
+    acc_dict["owner_id"] = current_user.id
+    acc_dict["granted_at"] = datetime.utcnow()
+    
+    result = await db.access.insert_one(acc_dict)
+    acc_dict["id"] = str(result.inserted_id)
     
     await log_action(db, current_user.id, "file_shared", request, document_id=str(doc.get("_id")))
     
-    return acc_db
+    return AccessInDB(**acc_dict)
+
+@router.get("/lookup_user")
+async def lookup_user(email: str, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": str(user["_id"]),
+        "email": user["email"],
+        "name": user["name"],
+        "rsa_public_key": user.get("rsa_public_key")
+    }
 
 @router.get("/list", response_model=List[AccessResponse])
 async def list_access(document_id: str, current_user: UserResponse = Depends(get_current_user)):

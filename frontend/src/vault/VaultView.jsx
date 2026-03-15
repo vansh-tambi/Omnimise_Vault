@@ -80,20 +80,25 @@ export default function VaultView({ vaultId }) {
       
       // If no key in context (e.g. shared document or haven't unlocked yet), try fetching access list
       if (!keyToUse) {
-        const accessRes = await api.get(`/access/list?document_id=${doc.id}`);
-        const specificAccess = accessRes.data.find(a => a.shared_with === user?.id);
-        
-        if (specificAccess && specificAccess.encrypted_key_for_recipient) {
-          const myPrivateKeyB64 = sessionStorage.getItem('rsa_private_key');
-          if (!myPrivateKeyB64) {
-            alert("RSA Private Key not found securely in session. Please unlock any owned vault first to initialize keys.");
+        try {
+          const accessRes = await api.get(`/access/list?document_id=${doc.id}`);
+          const specificAccess = accessRes.data.find(a => a.shared_with === user?.id);
+          
+          if (specificAccess && specificAccess.encrypted_key_for_recipient) {
+            const myPrivateKeyB64 = sessionStorage.getItem('rsa_private_key');
+            if (!myPrivateKeyB64) {
+              alert("RSA Private Key not found. Please log out and log back in, or unlock a vault to initialize keys.");
+              return;
+            }
+            const privateKeyObj = await importPrivateKeyFromBase64(myPrivateKeyB64);
+            keyToUse = await unwrapVaultKey(specificAccess.encrypted_key_for_recipient, privateKeyObj);
+          } else {
+            alert("Vault is locked! Please enter your PIN in the box above to unlock it before viewing documents.");
             return;
           }
-          const privateKeyObj = await importPrivateKeyFromBase64(myPrivateKeyB64);
-          keyToUse = await unwrapVaultKey(specificAccess.encrypted_key_for_recipient, privateKeyObj);
-        } else {
-          alert("Vault is locked. Please unlock it using your PIN first.");
-          return;
+        } catch (e) {
+            alert("Vault is locked! Please enter your PIN in the box above to unlock it before downloading documents.");
+            return;
         }
       }
 
@@ -207,8 +212,12 @@ export default function VaultView({ vaultId }) {
                   <FileText className="w-6 h-6" />
                 </div>
                 <div className="truncate pr-4">
-                  <p className="font-medium text-gray-200 truncate">{doc.filename}</p>
-                  <p className="text-xs text-gray-500 capitalize">{doc.content_type.split('/')[1] || doc.content_type} • {(doc.size_bytes / 1024).toFixed(1)} KB</p>
+                  <p className="font-medium text-gray-200 truncate">
+                    {currentKey ? doc.filename : `Encrypted Document (${doc.id.slice(-4)})`}
+                  </p>
+                  <p className="text-xs text-gray-500 capitalize">
+                    {currentKey ? `${doc.content_type.split('/')[1] || doc.content_type} • ${(doc.size_bytes / 1024).toFixed(1)} KB` : "Locked Format"}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
