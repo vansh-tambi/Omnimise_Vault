@@ -7,6 +7,7 @@ import Vault from './pages/Vault';
 import Requests from './pages/Requests';
 import Access from './pages/Access';
 import Messages from './pages/Messages';
+import DigiLockerImport from './pages/DigiLockerImport';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
             <Route path="/access" element={<ProtectedRoute><Access /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+            <Route path="/digilocker-import" element={<ProtectedRoute><DigiLockerImport /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>
