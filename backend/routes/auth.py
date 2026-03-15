@@ -40,7 +40,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
     if user_dict is None:
         raise HTTPException(status_code=404, detail="User not found")
     
-    user_dict["_id"] = str(user_dict["_id"])
+    # Map MongoDB _id to id and ensure required fields exist
+    user_dict["id"] = str(user_dict.pop("_id"))
+    if "created_at" not in user_dict:
+        from datetime import datetime
+        user_dict["created_at"] = datetime.utcnow()
+    
     return UserResponse(**user_dict)
 
 @router.post("/google")

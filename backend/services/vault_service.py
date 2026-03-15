@@ -6,7 +6,7 @@ from typing import List
 async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
     db = get_database()
     vault_dict = vault_data.model_dump()
-    vault_dict["owner_id"] = user_id
+    vault_dict["user_id"] = user_id
     
     vault_db = VaultInDB(**vault_dict)
     vault_db_dict = vault_db.model_dump(by_alias=True, exclude_none=True)
@@ -14,15 +14,15 @@ async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
         del vault_db_dict["_id"]
         
     result = await db.vaults.insert_one(vault_db_dict)
-    vault_db.id = str(result.inserted_id)
-    return vault_db
+    vault_db_dict["id"] = str(result.inserted_id)
+    return VaultInDB(**vault_db_dict)
 
 async def get_user_vaults(user_id: str) -> List[VaultInDB]:
     db = get_database()
-    cursor = db.vaults.find({"owner_id": user_id})
+    cursor = db.vaults.find({"user_id": user_id})
     vaults = []
     async for document in cursor:
-        document["_id"] = str(document["_id"])
+        document["id"] = str(document.pop("_id"))
         vaults.append(VaultInDB(**document))
     return vaults
 
@@ -30,7 +30,7 @@ async def check_vault_access(vault_id: str, user_id: str) -> bool:
     db = get_database()
     try:
         # Check if owner
-        vault = await db.vaults.find_one({"_id": ObjectId(vault_id), "owner_id": user_id})
+        vault = await db.vaults.find_one({"_id": ObjectId(vault_id), "user_id": user_id})
         if vault:
             return True
         
@@ -40,7 +40,7 @@ async def check_vault_access(vault_id: str, user_id: str) -> bool:
             return True
     except Exception:
         # Fallback if vault_id is string
-        vault = await db.vaults.find_one({"_id": vault_id, "owner_id": user_id})
+        vault = await db.vaults.find_one({"_id": vault_id, "user_id": user_id})
         if vault:
             return True
         

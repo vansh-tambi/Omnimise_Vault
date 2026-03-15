@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # Load .env before any os.getenv() calls
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 import os
