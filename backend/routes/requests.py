@@ -35,7 +35,9 @@ async def list_requests(current_user: UserResponse = Depends(get_current_user)):
 from pydantic import BaseModel
 class RespondRequest(BaseModel):
     request_id: str
-    status: str # "approved" or "rejected"
+    action: str # "approved" or "rejected"
+    
+from datetime import datetime
 
 @router.post("/respond")
 async def respond_to_request(res: RespondRequest, current_user: UserResponse = Depends(get_current_user)):
@@ -49,22 +51,21 @@ async def respond_to_request(res: RespondRequest, current_user: UserResponse = D
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
         
-    if req["target_user_id"] != current_user.id:
+    if req.get("organization_id") != current_user.id and req.get("target_user_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to respond")
         
-    await db.requests.update_one(query, {"$set": {"status": res.status}})
+    update_data = {
+        "status": res.action,
+        "responded_at": datetime.utcnow()
+    }
     
-    if res.status == "approved":
-        # automatically create access
-        from models.access import AccessInDB
-        acc = AccessInDB(
-            vault_id=req["vault_id"],
-            user_id=req["requester_id"],
-            granted_by=current_user.id
-        )
-        acc_dict = acc.model_dump(by_alias=True, exclude_none=True)
-        if "_id" in acc_dict:
-            del acc_dict["_id"]
-        await db.access.insert_one(acc_dict)
+    await db.requests.update_one(query, {"$set": update_data})
+    req.update(update_data)
+    req["_id"] = str(req["_id"])
+    
+    response_data = {"request": req}
+    
+    if res.action == "approved":
+        response_data["upload_url"] = "/documents/upload"
         
-    return {"message": f"Request {res.status}"}
+    return response_data

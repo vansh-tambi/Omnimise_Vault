@@ -62,7 +62,7 @@ async def get_document(id: str, current_user: UserResponse = Depends(get_current
         if access_record:
             expires_at = access_record.get("expires_at")
             if expires_at and expires_at <= datetime.utcnow():
-                raise HTTPException(status_code=403, detail="Access has expired")
+                raise HTTPException(status_code=403, detail="Access to this document has expired")
             has_access = True
 
     if not has_access:

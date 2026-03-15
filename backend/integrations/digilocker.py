@@ -69,9 +69,8 @@ async def digilocker_callback(code: str, state: str):
                 {"$set": {"digilocker_token": access_token}}
             )
             
-    # Normally, redirect back to frontend dashboard
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173/dashboard?digilocker=success")
-    return RedirectResponse(url=frontend_url)
+    frontend_base = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    return RedirectResponse(url=f"{frontend_base}/dashboard?digilocker=connected")
 
 @router.get("/documents")
 async def list_digilocker_documents(current_user: UserResponse = Depends(get_current_user)):

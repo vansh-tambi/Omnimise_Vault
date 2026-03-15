@@ -14,6 +14,9 @@ class GoogleAuthPayload(BaseModel):
     code: str
     public_key: Optional[str] = None
 
+class PublicKeyRegisterPayload(BaseModel):
+    public_key: str
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
     payload = verify_token(token)
     if payload is None:
@@ -62,7 +65,7 @@ async def google_login(payload: GoogleAuthPayload):
             email=email,
             name=name,
             picture=picture,
-            public_key=payload.public_key
+            rsa_public_key=payload.public_key
         )
         new_user_dict = new_user.model_dump(by_alias=True, exclude_none=True)
         if "_id" in new_user_dict:
@@ -73,8 +76,8 @@ async def google_login(payload: GoogleAuthPayload):
     else:
         user_id = str(user_dict["_id"])
         # Update public key if provided on new device
-        if payload.public_key and user_dict.get("public_key") != payload.public_key:
-            await db.users.update_one({"_id": user_dict["_id"]}, {"$set": {"public_key": payload.public_key}})
+        if payload.public_key and user_dict.get("rsa_public_key") != payload.public_key:
+            await db.users.update_one({"_id": user_dict["_id"]}, {"$set": {"rsa_public_key": payload.public_key}})
         
     # generate jwt
     access_token = create_access_token(data={"sub": user_id})
@@ -93,7 +96,19 @@ async def get_user_public_key(user_id: str, current_user: UserResponse = Depends
     except:
         user_dict = await db.users.find_one({"_id": user_id})
         
-    if not user_dict or not user_dict.get("public_key"):
-        raise HTTPException(status_code=404, detail="User or public key not found")
+    if not user_dict or "rsa_public_key" not in user_dict or not user_dict.get("rsa_public_key"):
+        raise HTTPException(status_code=404, detail="Public key not registered for this user")
         
-    return {"public_key": user_dict["public_key"]}
+    return {"rsa_public_key": user_dict["rsa_public_key"]}
+
+@router.post("/register-public-key")
+async def register_public_key(payload: PublicKeyRegisterPayload, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    from bson import ObjectId
+    try:
+        query = {"_id": ObjectId(current_user.id)}
+    except:
+        query = {"_id": current_user.id}
+        
+    await db.users.update_one(query, {"$set": {"rsa_public_key": payload.public_key}})
+    return {"message": "Public key registered successfully"}

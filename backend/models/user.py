@@ -6,7 +6,7 @@ class UserBase(BaseModel):
     email: EmailStr
     name: str
     picture: Optional[str] = None
-    public_key: Optional[str] = None
+    rsa_public_key: Optional[str] = None
     digilocker_token: Optional[str] = None
 
 class UserCreate(UserBase):
