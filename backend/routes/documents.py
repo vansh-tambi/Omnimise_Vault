@@ -16,6 +16,7 @@ async def upload_file(
     request: Request,
     vault_id: str = Form(...),
     file: UploadFile = File(...),
+    file_hash: str = Form(None),
     current_user: UserResponse = Depends(get_current_user)
 ):
     has_access = await check_vault_access(vault_id, current_user.id)
@@ -42,7 +43,8 @@ async def upload_file(
         vault_id=vault_id,
         content_type=file.content_type,
         size_bytes=size_bytes,
-        storage_url=storage_path
+        storage_url=storage_path,
+        file_hash=file_hash
     )
     
     created_doc = await create_document(doc_create, current_user.id)

@@ -9,6 +9,7 @@ class DocumentBase(BaseModel):
     self_destruct_after_views: Optional[int] = None
     self_destruct_at: Optional[datetime] = None
     view_count: int = 0
+    file_hash: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     storage_url: str

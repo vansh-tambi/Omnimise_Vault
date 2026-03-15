@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FileText, Download, Share2, ShieldAlert } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
-import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey } from '../encryption/crypto';
+import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey, hashFile } from '../encryption/crypto';
 import { useVaultKey } from '../context/VaultKeyContext';
 import { useAuth } from '../hooks/useAuth';
 import VaultPinPrompt from './VaultPinPrompt';
@@ -42,6 +42,9 @@ export default function VaultView({ vaultId }) {
 
     try {
       // Zero-Knowledge Encryption Pipeline
+      const fileBuffer = await file.arrayBuffer();
+      const fileHash = await hashFile(fileBuffer);
+      
       const { encrypted, iv } = await encryptFile(file, currentKey);
       
       // We must append IV to understand how to decrypt later
@@ -51,6 +54,7 @@ export default function VaultView({ vaultId }) {
       formData.append('vault_id', vaultId);
       // Pass original filename so UI knows what it is, even though content is encrypted
       formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
+      formData.append('file_hash', fileHash);
       
       if (uploadOptions.selfDestructViews) {
          formData.append('self_destruct_after_views', uploadOptions.selfDestructViews);
@@ -105,6 +109,12 @@ export default function VaultView({ vaultId }) {
       
       // Decrypt
       const decrypted = await decryptFile(data, new Uint8Array(iv), keyToUse);
+      
+      const computedHash = await hashFile(decrypted);
+      if (doc.file_hash && computedHash !== doc.file_hash) {
+        alert("Integrity check failed. This file may have been tampered with and has not been downloaded.");
+        return;
+      }
       
       // Download 
       const blob = new Blob([decrypted], { type: doc.content_type });

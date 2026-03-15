@@ -181,6 +181,7 @@ The foundation of the platform's security is its integration of various modern c
 *   **PBKDF2 Key Derivation**: User PINs are combined with the Vault ID (acting as a salt) and run through 100,000 iterations of HMAC-SHA256, mathematically delaying brute-force attacks against weak PINs.
 *   **AES-GCM-256 Symmetric Encryption**: Documents are encrypted utilizing military-grade AES with a 256-bit key length and a Galois/Counter Mode (GCM) layout, guaranteeing both absolute confidentiality and ciphertext authenticity (tamper evidence).
     *   **IV Generation**: Each encryption operation generates a unique 96-bit Initialization Vector using the browser's `crypto.getRandomValues()` function. The IV is prepended to the ciphertext before transmission, ensuring that identical files encrypted with the same key produce entirely different ciphertexts.
+*   **File Integrity Verification**: A SHA-256 hash of the original plaintext file is computed in the browser before encryption and stored as document metadata. Upon decryption, the hash is recomputed and compared against the stored value. Any mismatch — indicating server-side file tampering — immediately halts the download and alerts the user.
 *   **In-Memory Lifecycle**: The derived AES keys are housed purely in transient React Component state natively governed by the JavaScript garbage collector. Keys do not persist in `localStorage` or indexed DB structures, terminating immediately upon a page refresh or explicit browser session closure.
 *   **Asymmetric Key Wrapping**: Document sharing avoids central key escrow by utilizing native Web Crypto `RSA-OAEP` schemas. Upon unlocking a vault, the frontend creates a 2048-bit RSA pair, storing the private key securely in Javascript `sessionStorage` and broadcasting the public key via base64 to the backend. The sender's client wraps the symmetric vault key specifically for the recipient's public key mathematically.
 *   **Storage Abstraction Layer**: By separating the metadata pointers from the physical ciphertext blobs, the system gracefully handles dynamic switching between Google Cloud Storage and strict local development silos (`GCS_ENABLED=false`) ensuring rapid local iterating.
@@ -208,5 +209,6 @@ The foundation of the platform's security is its integration of various modern c
 | **Self-Destruct** | View-count and time-based document destruction |
 | **File Validation** | Extension whitelist enforced server-side |
 | **Inactivity Lock** | Auto-lock after 5 minutes, explicit memory wipe |
+| **File Integrity** | SHA-256 hash computed pre-encryption, verified post-decryption in browser |
 | **Backup** | Nightly encrypted ZIP to Google Drive |
 
