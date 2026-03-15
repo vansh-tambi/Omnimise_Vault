@@ -6,7 +6,7 @@ import { KeyRound } from 'lucide-react';
 export default function VaultPinPrompt({ vaultId, onKeyDerived }) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const { setVaultKey } = useVaultKey();
+  const { unlockVault } = useVaultKey();
 
   const handleUnlock = async (e) => {
     e.preventDefault();
@@ -14,12 +14,8 @@ export default function VaultPinPrompt({ vaultId, onKeyDerived }) {
     setLoading(true);
     
     try {
-      // Use vaultId as the salt to ensure uniqueness per vault
-      const enc = new TextEncoder();
-      const salt = enc.encode(vaultId);
-      
-      const key = await deriveKey(pin, salt);
-      setVaultKey({ [vaultId]: key });
+      const token = localStorage.getItem('token');
+      const key = await unlockVault(vaultId, pin, token);
       onKeyDerived(key);
     } catch (err) {
       console.error(err);

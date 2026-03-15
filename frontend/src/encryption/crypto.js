@@ -29,68 +29,82 @@ export async function deriveKey(pin, salt) {
 }
 
 export async function generateRSAKeyPair() {
-  const keyPair = await window.crypto.subtle.generateKey(
+  return await crypto.subtle.generateKey(
     {
       name: "RSA-OAEP",
       modulusLength: 2048,
       publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256",
+      hash: "SHA-256"
     },
     true,
-    ["wrapKey", "unwrapKey", "encrypt", "decrypt"]
+    ["wrapKey", "unwrapKey"]
   );
-
-  const publicKeyJwk = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  const privateKeyJwk = await window.crypto.subtle.exportKey("jwk", keyPair.privateKey);
-
-  return { 
-    publicKeyStr: JSON.stringify(publicKeyJwk), 
-    privateKeyStr: JSON.stringify(privateKeyJwk)
-  };
 }
 
-export async function encryptKeyForRecipient(vaultKey, recipientPublicKeyStr) {
-  const recipientPublicKeyJwk = JSON.parse(recipientPublicKeyStr);
-  const publicKey = await window.crypto.subtle.importKey(
-    "jwk",
-    recipientPublicKeyJwk,
-    {
-      name: "RSA-OAEP",
-      hash: "SHA-256",
-    },
+export async function exportPublicKeyAsBase64(publicKey) {
+  const exported = await crypto.subtle.exportKey("spki", publicKey);
+  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+}
+
+export async function exportPrivateKeyAsBase64(privateKey) {
+  const exported = await crypto.subtle.exportKey("pkcs8", privateKey);
+  return btoa(String.fromCharCode(...new Uint8Array(exported)));
+}
+
+export async function importPublicKeyFromBase64(base64String) {
+  const binaryDerString = atob(base64String);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    binaryDer[i] = binaryDerString.charCodeAt(i);
+  }
+  return await crypto.subtle.importKey(
+    "spki",
+    binaryDer.buffer,
+    { name: "RSA-OAEP", hash: "SHA-256" },
     true,
     ["wrapKey"]
   );
-  const wrappedKey = await window.crypto.subtle.wrapKey(
-    "raw",
-    vaultKey,
-    publicKey,
-    { name: "RSA-OAEP" }
-  );
-  return btoa(String.fromCharCode(...new Uint8Array(wrappedKey)));
 }
 
-export async function decryptKeyFromSender(encryptedKeyBase64, myPrivateKeyStr) {
-  const privateKeyJwk = JSON.parse(myPrivateKeyStr);
-  const privateKey = await window.crypto.subtle.importKey(
-    "jwk",
-    privateKeyJwk,
-    {
-      name: "RSA-OAEP",
-      hash: "SHA-256",
-    },
+export async function importPrivateKeyFromBase64(base64String) {
+  const binaryDerString = atob(base64String);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    binaryDer[i] = binaryDerString.charCodeAt(i);
+  }
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    binaryDer.buffer,
+    { name: "RSA-OAEP", hash: "SHA-256" },
     true,
     ["unwrapKey"]
   );
-  const encryptedKeyBytes = new Uint8Array([...atob(encryptedKeyBase64)].map(c => c.charCodeAt(0)));
-  
-  return await window.crypto.subtle.unwrapKey(
+}
+
+export async function wrapVaultKey(vaultKey, recipientPublicKey) {
+  const wrapped = await crypto.subtle.wrapKey(
     "raw",
-    encryptedKeyBytes,
+    vaultKey,
+    recipientPublicKey,
+    { name: "RSA-OAEP" }
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(wrapped)));
+}
+
+export async function unwrapVaultKey(wrappedKeyBase64, privateKey) {
+  const binaryDerString = atob(wrappedKeyBase64);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) {
+    binaryDer[i] = binaryDerString.charCodeAt(i);
+  }
+  
+  return await crypto.subtle.unwrapKey(
+    "raw",
+    binaryDer.buffer,
     privateKey,
     { name: "RSA-OAEP" },
     { name: "AES-GCM", length: 256 },
-    false, // No longer needs to be extractable by recipient once unwrapped
+    true,
     ["encrypt", "decrypt"]
   );
 }

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { FileText, Download, Share2, ShieldAlert } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
-import { encryptFile, decryptFile, encryptKeyForRecipient, decryptKeyFromSender } from '../encryption/crypto';
+import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey } from '../encryption/crypto';
 import { useVaultKey } from '../context/VaultKeyContext';
 import { useAuth } from '../hooks/useAuth';
 import VaultPinPrompt from './VaultPinPrompt';
+import ShareDocument from '../access/ShareDocument';
 
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
@@ -69,8 +70,13 @@ export default function VaultView({ vaultId }) {
         const specificAccess = accessRes.data.find(a => a.shared_with === user?.id);
         
         if (specificAccess && specificAccess.encrypted_key_for_recipient) {
-          const myPrivateKeyStr = localStorage.getItem('rsa_private_key');
-          keyToUse = await decryptKeyFromSender(specificAccess.encrypted_key_for_recipient, myPrivateKeyStr);
+          const myPrivateKeyB64 = sessionStorage.getItem('rsa_private_key');
+          if (!myPrivateKeyB64) {
+            alert("RSA Private Key not found securely in session. Please unlock any owned vault first to initialize keys.");
+            return;
+          }
+          const privateKeyObj = await importPrivateKeyFromBase64(myPrivateKeyB64);
+          keyToUse = await unwrapVaultKey(specificAccess.encrypted_key_for_recipient, privateKeyObj);
         } else {
           alert("Vault is locked. Please unlock it using your PIN first.");
           return;
@@ -104,31 +110,8 @@ export default function VaultView({ vaultId }) {
     }
   };
 
-  const executeShare = async () => {
-    if (!recipientId || !sharingDoc || !currentKey) {
-      alert("Cannot share: Missing recipient ID or Vault is locked (Unlock it first to wrap the key).");
-      return;
-    }
-    setShareLoading(true);
-    try {
-      const pubKeyRes = await api.get(`/users/${recipientId}/public-key`);
-      const wrappedKey = await encryptKeyForRecipient(currentKey, pubKeyRes.data.public_key);
-      
-      await api.post('/access/share', {
-         document_id: sharingDoc.id,
-         shared_with: recipientId,
-         encrypted_key_for_recipient: wrappedKey,
-         permission: "read"
-      });
-      alert('Document shared securely!');
-      setSharingDoc(null);
-      setRecipientId('');
-    } catch(err) {
-      console.error(err);
-      alert('Failed to share document securely.');
-    } finally {
-      setShareLoading(false);
-    }
+  const handleCloseShare = () => {
+    setSharingDoc(null);
   };
 
   // Only enforce VaultPinPrompt if vault is specifically requested to upload into and is locked
@@ -187,35 +170,11 @@ export default function VaultView({ vaultId }) {
       )}
       
       {sharingDoc && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="card w-full max-w-md bg-gray-900 border-blue-500/30">
-            <h3 className="text-xl font-bold text-white mb-2">Securely Share Document</h3>
-            <p className="text-sm text-gray-400 mb-6 truncate">Sharing: {sharingDoc.filename}</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Recipient User ID</label>
-                <input 
-                  type="text" 
-                  value={recipientId}
-                  onChange={(e) => setRecipientId(e.target.value)}
-                  className="input-field" 
-                  placeholder="Paste user ID here..."
-                />
-              </div>
-              <div className="text-xs text-blue-400/80 bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
-                The vault key will be algorithmically wrapped using the recipient's RSA public key. The server cannot derive the AES key.
-              </div>
-            </div>
-            
-            <div className="flex justify-end gap-3 mt-6">
-              <button disabled={shareLoading} onClick={() => {setSharingDoc(null); setRecipientId('');}} className="btn-secondary">Cancel</button>
-              <button disabled={shareLoading || !recipientId} onClick={executeShare} className="btn-primary">
-                {shareLoading ? 'Sharing...' : 'Share Key'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ShareDocument 
+          document={sharingDoc} 
+          currentKey={currentKey} 
+          onClose={handleCloseShare} 
+        />
       )}
     </div>
   );
