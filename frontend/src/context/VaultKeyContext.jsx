@@ -1,4 +1,5 @@
-import { createContext, useState, useContext } from 'react';
+import { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   deriveKey, 
   generateRSAKeyPair, 
@@ -12,11 +13,39 @@ const VaultKeyContext = createContext();
 export function VaultKeyProvider({ children }) {
   const [vaultKey, setVaultKey] = useState(null);
   const [rsaPrivateKey, setRsaPrivateKey] = useState(null);
+  const interactivityTimer = useRef(null);
+  const navigate = useNavigate();
 
   const clearKey = () => {
     setVaultKey(null);
     setRsaPrivateKey(null);
+    sessionStorage.removeItem('rsa_private_key');
+    // Explicit memory dereference — key eligible for garbage collection
   };
+
+  const resetInactivityTimer = () => {
+    if (interactivityTimer.current) clearTimeout(interactivityTimer.current);
+    if (!vaultKey) return;
+
+    interactivityTimer.current = setTimeout(() => {
+      clearKey();
+      navigate('/?locked=true');
+      alert("Vault locked due to inactivity.");
+    }, 300000); // 5 minutes
+  };
+
+  useEffect(() => {
+    if (vaultKey) {
+      resetInactivityTimer();
+      const events = ['mousemove', 'keydown', 'click', 'touchstart'];
+      events.forEach(event => window.addEventListener(event, resetInactivityTimer));
+
+      return () => {
+        if (interactivityTimer.current) clearTimeout(interactivityTimer.current);
+        events.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+      };
+    }
+  }, [vaultKey]);
 
   const unlockVault = async (vaultId, pin, authToken) => {
     const enc = new TextEncoder();

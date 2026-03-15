@@ -7,6 +7,8 @@ import {
 
 export default function ShareDocument({ document, currentKey, onClose, onSuccess }) {
   const [recipientId, setRecipientId] = useState('');
+  const [maxViews, setMaxViews] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
   const [loading, setLoading] = useState(false);
 
   const executeShare = async () => {
@@ -25,9 +27,11 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
          document_id: document.id,
          shared_with: recipientId,
          encrypted_key_for_recipient: wrappedKey,
-         permission: "read",
-         expires_at: null
+         permission: "read"
       };
+      
+      if (maxViews) payload.max_views = parseInt(maxViews, 10);
+      if (expiresAt) payload.expires_at = new Date(expiresAt).toISOString();
 
       await api.post('/access/share', payload);
       alert('Document shared securely!');
@@ -57,6 +61,28 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
               className="input-field w-full" 
               placeholder="Paste user ID here..."
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Maximum views allowed</label>
+              <input 
+                type="number" 
+                value={maxViews}
+                onChange={(e) => setMaxViews(e.target.value)}
+                className="input-field w-full" 
+                placeholder="Optional"
+                min="1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Access expires at</label>
+              <input 
+                type="datetime-local" 
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="input-field w-full" 
+              />
+            </div>
           </div>
           <div className="text-xs text-blue-400/80 bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
             The vault key will be algorithmically wrapped using the recipient's RSA public key. The server cannot derive the AES key.

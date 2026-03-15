@@ -18,6 +18,8 @@ export default function VaultView({ vaultId }) {
   const [sharingDoc, setSharingDoc] = useState(null);
   const [recipientId, setRecipientId] = useState('');
   const [shareLoading, setShareLoading] = useState(false);
+  
+  const [uploadOptions, setUploadOptions] = useState({ selfDestructViews: '', selfDestructDate: '' });
 
   useEffect(() => {
     const fetchDocs = async () => {
@@ -49,14 +51,22 @@ export default function VaultView({ vaultId }) {
       formData.append('vault_id', vaultId);
       // Pass original filename so UI knows what it is, even though content is encrypted
       formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
+      
+      if (uploadOptions.selfDestructViews) {
+         formData.append('self_destruct_after_views', uploadOptions.selfDestructViews);
+      }
+      if (uploadOptions.selfDestructDate) {
+         formData.append('self_destruct_at', new Date(uploadOptions.selfDestructDate).toISOString());
+      }
 
       const res = await api.post('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setDocuments(prev => [...prev, res.data]);
+      setUploadOptions({ selfDestructViews: '', selfDestructDate: '' });
     } catch (err) {
       console.error(err);
-      alert('Upload failed');
+      alert('Upload failed: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -106,7 +116,12 @@ export default function VaultView({ vaultId }) {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert("Failed to decrypt or retrieve document. Make sure you unlocked the vault or have valid shared access.");
+      if (err.response?.status === 410) {
+        alert("This document no longer exists. It was permanently destroyed as configured.");
+        setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      } else {
+        alert("Failed to decrypt or retrieve document. Make sure you unlocked the vault or have valid shared access.");
+      }
     }
   };
 
@@ -119,14 +134,44 @@ export default function VaultView({ vaultId }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between bg-gray-800 p-4 rounded-lg border border-gray-700">
-        <div className="flex items-center gap-3">
-          <ShieldAlert className="text-green-400 w-6 h-6" />
-          <span className="text-sm text-gray-300">
-             {currentKey ? "Vault Unlocked. Operations secure." : "Vault Locked. Downloads will attempt to use shared RSA wrapper."}
-          </span>
+      <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ShieldAlert className="text-green-400 w-6 h-6" />
+            <span className="text-sm text-gray-300">
+               {currentKey ? "Vault Unlocked. Operations secure." : "Vault Locked. Downloads will attempt to use shared RSA wrapper."}
+            </span>
+          </div>
+          {currentKey && <UploadButton onUpload={handleUpload} />}
         </div>
-        {currentKey && <UploadButton onUpload={handleUpload} />}
+        
+        {currentKey && (
+          <div className="flex flex-col sm:flex-row gap-4 border-t border-gray-700 pt-4 mt-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-400 mb-1">Self-destruct after N views</label>
+              <input 
+                type="number" 
+                value={uploadOptions.selfDestructViews}
+                onChange={(e) => setUploadOptions(prev => ({ ...prev, selfDestructViews: e.target.value }))}
+                className="input-field w-full py-1 text-sm field-sizing-sm" 
+                placeholder="Optional max views"
+                min="1"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-400 mb-1">Auto-delete after date</label>
+              <input 
+                type="datetime-local" 
+                value={uploadOptions.selfDestructDate}
+                onChange={(e) => setUploadOptions(prev => ({ ...prev, selfDestructDate: e.target.value }))}
+                className="input-field w-full py-1 text-sm field-sizing-sm text-gray-300" 
+              />
+            </div>
+            <div className="flex-1 flex text-xs text-blue-400/80 items-center px-2">
+              Values above apply to the next file selected via Upload File.
+            </div>
+          </div>
+        )}
       </div>
       
       {!currentKey && (
