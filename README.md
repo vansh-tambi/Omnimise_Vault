@@ -18,6 +18,56 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 6. **DigiLocker Integration (India)**: Proxies raw government documents into the frontend where they are wrapped with the zero-knowledge AES key before touching our cloud storage.
 7. **Background Tasks (Google Drive)**: An embedded APScheduler cron service runs daily at midnight to execute completely automated ZIP backups of users' encrypted vaults into their connected Google Drive accounts. We also added a manual trigger mechanism in the dashboard.
 
+### System Flow
+```text
+User Browser
+     |
+     | (PIN entry)
+     v
+PBKDF2 Key Derivation (100,000 iterations, Vault ID as salt)
+     |
+     v
+AES-GCM-256 Encryption (96-bit random IV per file)
+     |
+     | (ciphertext only)
+     v
+FastAPI Backend (JWT validated, plaintext never seen)
+     |
+     +----------------+
+     |                |
+     v                v
+MongoDB            Google Cloud Storage
+(metadata,         (encrypted blobs,
+ access records,    .enc files only)
+ audit logs)
+     |
+     v
+Google Drive (nightly encrypted ZIP backup)
+```
+
+```mermaid
+flowchart TD
+    Browser["User Browser"] -- "1. Enters PIN" --> PBKDF2["PBKDF2 Key Derivation"]
+    PBKDF2 -- "2. Derives 256-bit Key" --> Encrypt["AES-GCM-256 Encryption"]
+    Browser -- "Uploads File" --> Encrypt
+    Encrypt -- "3. Transmits Ciphertext (Blob + 96-bit IV) ONLY" --> API["FastAPI Backend"]
+    
+    API -- "4a. Validates JWT & Stores Metadata" --> DB[("MongoDB")]
+    API -- "4b. Routes Ciphertext Blob" --> Storage["Google Cloud Storage / Local Storage"]
+    
+    DB -. "Nightly Meta Sync" .-> Cron["APScheduler Backup Cron"]
+    Storage -. "Nightly Blob Sync" .-> Cron
+    Cron -- "5. Zips encrypted blobs into user folder" --> GD["Google Drive"]
+    
+    classDef secure fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff;
+    classDef server fill:#1e293b,stroke:#64748b,stroke-width:1px,color:#cbd5e1;
+    classDef external fill:#1e40af,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    
+    class Browser,PBKDF2,Encrypt secure;
+    class API,DB,Storage,Cron server;
+    class GD external;
+```
+
 ## Technology Stack
 
 | Component | Technology | Description |
@@ -130,14 +180,33 @@ The foundation of the platform's security is its integration of various modern c
 *   **Zero-Knowledge Paradigm**: The server assumes a hostile or breached state. It operates under the constraint that it can only store routing metadata and ciphertext, completely insulating user privacy.
 *   **PBKDF2 Key Derivation**: User PINs are combined with the Vault ID (acting as a salt) and run through 100,000 iterations of HMAC-SHA256, mathematically delaying brute-force attacks against weak PINs.
 *   **AES-GCM-256 Symmetric Encryption**: Documents are encrypted utilizing military-grade AES with a 256-bit key length and a Galois/Counter Mode (GCM) layout, guaranteeing both absolute confidentiality and ciphertext authenticity (tamper evidence).
+    *   **IV Generation**: Each encryption operation generates a unique 96-bit Initialization Vector using the browser's `crypto.getRandomValues()` function. The IV is prepended to the ciphertext before transmission, ensuring that identical files encrypted with the same key produce entirely different ciphertexts.
 *   **In-Memory Lifecycle**: The derived AES keys are housed purely in transient React Component state natively governed by the JavaScript garbage collector. Keys do not persist in `localStorage` or indexed DB structures, terminating immediately upon a page refresh or explicit browser session closure.
 *   **Asymmetric Key Wrapping**: Document sharing avoids central key escrow by utilizing native Web Crypto `RSA-OAEP` schemas. Upon unlocking a vault, the frontend creates a 2048-bit RSA pair, storing the private key securely in Javascript `sessionStorage` and broadcasting the public key via base64 to the backend. The sender's client wraps the symmetric vault key specifically for the recipient's public key mathematically.
 *   **Storage Abstraction Layer**: By separating the metadata pointers from the physical ciphertext blobs, the system gracefully handles dynamic switching between Google Cloud Storage and strict local development silos (`GCS_ENABLED=false`) ensuring rapid local iterating.
 *   **Signed URLs**: The backend provisions heavily restricted, 15-minute time-to-live signed Google Cloud Storage endpoint URLs dynamically, deprecating permanent public exposure of blob locations.
 *   **JWT Authorization**: API perimeter defenses evaluate short-lived JSON Web Tokens signed by the backend framework incorporating explicit identity claims evaluated prior to any database operation.
+*   **Zero-Trust Design**: The system is designed following a zero-trust architecture, where cryptographic boundaries ensure that even in the event of full server compromise, attackers cannot decrypt user data without the client-side derived keys. The server is treated as an untrusted relay at all times.
 
 ## Known Limitations
 
 *   **Fatal Key Loss on Session End**: Because keys reside strictly in transient memory without severe compromise of the risk profile, closing the browser implicitly locks the vault. If the user forgets their PIN, mathematical recovery of the documents is permanently technically impossible.
+*   **Inactivity Lock**: The vault automatically locks after 5 minutes of user inactivity, destroying the in-memory key. This is a security feature but may interrupt active workflows.
 *   **HTTP Polling Latency**: Real-time notifications and encrypted messaging rely on client-side HTTP `setInterval` polling (every 5 seconds) rather than persistent bi-directional WebSockets, causing minor visual latency up to the polling interval boundary and incrementally increased server load.
 *   **Single-Region Cloud Storage**: Current infrastructure targets a singular Google Cloud Storage bucket natively determined by environment parameters, potentially exposing users to geographical latency outside the bucket's home region footprint.
+
+## Security Features Summary
+
+| Feature | Implementation |
+| :--- | :--- |
+| **Encryption** | AES-GCM-256 with unique 96-bit IV per file |
+| **Key Derivation** | PBKDF2-HMAC-SHA256, 100,000 iterations |
+| **Key Storage** | In-memory only, wiped on lock or inactivity |
+| **Document Sharing** | RSA-OAEP 2048-bit asymmetric key wrapping |
+| **Access Control** | JWT + MongoDB access matrix + expiry enforcement |
+| **Audit Trail** | Full forensic log of all vault actions with IP |
+| **Self-Destruct** | View-count and time-based document destruction |
+| **File Validation** | Extension whitelist enforced server-side |
+| **Inactivity Lock** | Auto-lock after 5 minutes, explicit memory wipe |
+| **Backup** | Nightly encrypted ZIP to Google Drive |
+
