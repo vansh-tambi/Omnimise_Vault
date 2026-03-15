@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { useVault } from '../hooks/useVault';
 import VaultCard from '../components/VaultCard';
 import VaultCreate from '../vault/VaultCreate';
-import { LayoutDashboard, Link2, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Link2, CheckCircle2, Cloud } from 'lucide-react';
 import api from '../services/api';
 
 export default function Dashboard() {
   const { vaults, loading, fetchVaults } = useVault();
   const [showDigiSuccess, setShowDigiSuccess] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
+  
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMessage, setBackupMessage] = useState(null);
 
   useEffect(() => {
     fetchVaults();
@@ -37,6 +40,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleBackup = async () => {
+    setBackupLoading(true);
+    setBackupMessage(null);
+    try {
+      await api.post('/backup/trigger');
+      setBackupMessage({ type: 'success', text: 'Vault backup uploaded to your Google Drive successfully' });
+    } catch (err) {
+      console.error("Backup failed", err);
+      setBackupMessage({ type: 'error', text: 'Backup failed. Please try again or check your Google Drive connection' });
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-700 pb-4">
@@ -44,15 +61,32 @@ export default function Dashboard() {
           <LayoutDashboard className="w-6 h-6 text-gray-300" />
           <h1 className="text-2xl font-semibold text-white">Your Dashboard</h1>
         </div>
-        <button 
-          onClick={handleDigiLockerConnect}
-          disabled={connectLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition border border-blue-500/30"
-        >
-          <Link2 className="w-4 h-4" />
-          {connectLoading ? "Connecting..." : "Connect DigiLocker"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleBackup}
+            disabled={backupLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 hover:bg-gray-700 rounded-lg transition border border-gray-600"
+          >
+            <Cloud className="w-4 h-4" />
+            {backupLoading ? "Backing up..." : "Backup to Drive"}
+          </button>
+          <button 
+            onClick={handleDigiLockerConnect}
+            disabled={connectLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition border border-blue-500/30"
+          >
+            <Link2 className="w-4 h-4" />
+            {connectLoading ? "Connecting..." : "Connect DigiLocker"}
+          </button>
+        </div>
       </div>
+
+      {backupMessage && (
+        <div className={`p-4 rounded-lg flex items-center gap-3 border ${backupMessage.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+          <CheckCircle2 className={`w-5 h-5 ${backupMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`} />
+          <p>{backupMessage.text}</p>
+        </div>
+      )}
 
       {showDigiSuccess && (
         <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 text-green-400 p-4 rounded-lg">
