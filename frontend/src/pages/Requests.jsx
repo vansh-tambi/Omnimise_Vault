@@ -3,6 +3,9 @@ import api from '../services/api';
 import { UserCheck, Check, X, Plus, Send, Clock, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import ShareDocument from '../access/ShareDocument';
 import { useVaultKey } from '../context/VaultKeyContext';
+import VaultPinPrompt from '../vault/VaultPinPrompt';
+import UploadButton from '../components/UploadButton';
+import { encryptFile, hashFile } from '../encryption/crypto';
 
 export default function Requests() {
   const [requests, setRequests] = useState([]);
@@ -93,6 +96,31 @@ export default function Requests() {
   }, [selectedVault]);
 
   const currentVaultKey = vaultKey?.[selectedVault];
+
+  const handleInlineUpload = async (file) => {
+    if (!currentVaultKey || !selectedVault) return;
+    try {
+      const fileBuffer = await file.arrayBuffer();
+      const fileHash = await hashFile(fileBuffer);
+
+      const { encrypted, iv } = await encryptFile(file, currentVaultKey);
+      const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
+
+      const formData = new FormData();
+      formData.append('vault_id', selectedVault);
+      formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
+      formData.append('file_hash', fileHash);
+
+      const res = await api.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setVaultDocs(prev => [...prev, res.data]);
+      setSelectedDoc(res.data); // Auto-select the newly uploaded doc
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed: ' + (err.response?.data?.detail || err.message));
+    }
+  };
 
   const incoming = requests.filter(r => r.target_user_id && r.status !== undefined
     // will compare by checking context — backend filters this correctly, so we display all and label them
@@ -254,13 +282,24 @@ export default function Requests() {
             </div>
 
             {selectedVault && !currentVaultKey && (
-              <p className="text-amber-400 text-sm">⚠ Vault is locked. Please unlock it first via the Vault page, then come back here.</p>
+              <div className="mt-4 border border-amber-500/20 rounded-lg p-2 bg-gray-800">
+                <VaultPinPrompt vaultId={selectedVault} onKeyDerived={() => {}} />
+              </div>
             )}
 
-            {selectedVault && currentVaultKey && vaultDocs.length > 0 && (
+            {selectedVault && currentVaultKey && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Select Document</label>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-300">Select Document</label>
+                  <UploadButton onUpload={handleInlineUpload} />
+                </div>
+                
+                {vaultDocs.length === 0 ? (
+                  <div className="text-center text-sm text-gray-500 py-6 border border-dashed border-gray-700 rounded-lg">
+                    This vault is empty. Upload a new document above.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
                   {vaultDocs.map(doc => (
                     <label key={doc.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
                       selectedDoc?.id === doc.id ? 'border-green-500/60 bg-green-500/10' : 'border-gray-700 hover:border-gray-500'
@@ -275,7 +314,8 @@ export default function Requests() {
                       <span className="text-gray-200 text-sm">{doc.filename}</span>
                     </label>
                   ))}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 

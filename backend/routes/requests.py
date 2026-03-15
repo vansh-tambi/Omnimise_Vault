@@ -51,12 +51,11 @@ async def list_requests(current_user: UserResponse = Depends(get_current_user)):
     return reqs
 
 
+from pydantic import BaseModel
+
 class RespondRequest(BaseModel):
     request_id: str
     action: str  # "approved" or "rejected"
-
-from pydantic import BaseModel
-
 
 @router.post("/respond")
 async def respond_to_request(res: RespondRequest, current_user: UserResponse = Depends(get_current_user)):
