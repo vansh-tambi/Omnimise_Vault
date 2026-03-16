@@ -52,7 +52,7 @@ export default function Login() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
         
-        <div className="relative z-10 flex flex-col items-center">
+          <div className="relative z-10 flex flex-col items-center">
           <div className="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6 shadow-inner ring-1 ring-blue-500/30">
             <Shield className="w-10 h-10 text-blue-400" />
           </div>
@@ -70,6 +70,10 @@ export default function Login() {
                 shape="rectangular"
                 text="continue_with"
                 width="320"
+                flow="auth-code"
+                scope="openid email profile https://www.googleapis.com/auth/drive.file"
+                access_type="offline"
+                prompt="consent"
               />
             </div>
           </div>

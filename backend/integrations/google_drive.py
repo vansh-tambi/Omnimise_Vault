@@ -3,6 +3,8 @@ import io
 import zipfile
 import asyncio
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from database.mongodb import get_database
@@ -10,6 +12,7 @@ from integrations.gcs_storage import get_gcs_client, GCS_BUCKET_NAME
 from bson import ObjectId
 
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
+TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 def authenticate_drive():
     """Authenticate and return Google Drive API service using Service Account JSON"""
@@ -26,9 +29,35 @@ def authenticate_drive():
         
     return build('drive', 'v3', credentials=creds)
 
+def authenticate_drive_for_user(user: dict):
+    access_token = user.get("google_drive_access_token")
+    refresh_token = user.get("google_drive_refresh_token")
+
+    if not access_token and not refresh_token:
+        raise RuntimeError("Google Drive not connected for this user")
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise RuntimeError("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET")
+
+    creds = Credentials(
+        token=access_token,
+        refresh_token=refresh_token,
+        token_uri=TOKEN_URI,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=SCOPES,
+    )
+
+    if creds.refresh_token:
+        creds.refresh(GoogleAuthRequest())
+
+    return build('drive', 'v3', credentials=creds), creds
+
 def create_backup_folder(service, user_id: str) -> str:
-    """Create or find a folder named vault-backup-{user_id} in Google Drive."""
-    folder_name = f"vault-backup-{user_id}"
+    """Create or find a folder named Omnimise Vault Backups in Google Drive."""
+    folder_name = "Omnimise Vault Backups"
     
     # Check if exists
     query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
@@ -60,13 +89,23 @@ async def backup_user_vault(user_id: str):
         # Wait, documents are bound to vault_id. 
         # So we first find all vaults for the user.
         try:
-            vaults = await db.vaults.find({"owner_id": user_id}).to_list(length=None)
+            vaults = await db.vaults.find({"user_id": user_id}).to_list(length=None)
         except Exception:
             # Fallback if find returns a cursor (motor behavior varies based on await)
-            cursor = db.vaults.find({"owner_id": user_id})
+            cursor = db.vaults.find({"user_id": user_id})
             vaults = []
             async for v in cursor:
                 vaults.append(v)
+
+        if not vaults:
+            # Backward compatibility for older data that used owner_id
+            try:
+                vaults = await db.vaults.find({"owner_id": user_id}).to_list(length=None)
+            except Exception:
+                cursor = db.vaults.find({"owner_id": user_id})
+                vaults = []
+                async for v in cursor:
+                    vaults.append(v)
                 
         if not vaults:
             print(f"[{user_id}] No vaults found.")
@@ -111,9 +150,17 @@ async def backup_user_vault(user_id: str):
                 
         zip_buffer.seek(0)
         
-        # Step 2: Upload to Google Drive
-        # Using synchronous Drive API call here since the SDK is sync
-        service = authenticate_drive()
+        # Step 2: Upload to Google Drive using user's OAuth credentials
+        user = None
+        try:
+            user = await db.users.find_one({"_id": ObjectId(user_id)})
+        except Exception:
+            user = await db.users.find_one({"_id": user_id})
+
+        if not user:
+            raise RuntimeError("User not found for Drive backup")
+
+        service, creds = authenticate_drive_for_user(user)
         folder_id = create_backup_folder(service, user_id)
         
         from datetime import datetime
@@ -128,6 +175,13 @@ async def backup_user_vault(user_id: str):
         
         print(f"[{user_id}] Triggering Drive Upload of {backup_filename}...")
         drive_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+        # Persist refreshed access token if needed
+        if creds and creds.token:
+            await db.users.update_one(
+                {"_id": user.get("_id")},
+                {"$set": {"google_drive_access_token": creds.token}},
+            )
         
         print(f"[{user_id}] Backup complete. Drive File ID: {drive_file.get('id')}")
         

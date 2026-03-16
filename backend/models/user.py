@@ -11,6 +11,9 @@ class UserBase(BaseModel):
     picture: Optional[str] = None
     rsa_public_key: Optional[str] = None
     digilocker_token: Optional[str] = None
+    google_drive_refresh_token: Optional[str] = None
+    google_drive_access_token: Optional[str] = None
+    google_drive_token_expiry: Optional[datetime] = None
 
 
 class UserCreate(UserBase):

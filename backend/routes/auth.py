@@ -70,6 +70,9 @@ async def google_login(payload: GoogleAuthPayload):
     email = idinfo["email"]
     name = idinfo.get("name", "Unknown")
     picture = idinfo.get("picture")
+    drive_access_token = idinfo.get("access_token")
+    drive_refresh_token = idinfo.get("refresh_token")
+    drive_expires_in = idinfo.get("expires_in")
     
     # check if user exists
     db = get_database()
@@ -77,21 +80,41 @@ async def google_login(payload: GoogleAuthPayload):
         user_dict = await db.users.find_one({"google_id": google_id})
         if not user_dict:
             from datetime import datetime
+            from datetime import datetime, timedelta
+            token_expiry = None
+            if drive_expires_in:
+                token_expiry = datetime.utcnow() + timedelta(seconds=int(drive_expires_in))
+
             new_user_dict = {
                 "google_id": google_id,
                 "email": email,
                 "name": name,
                 "picture": picture,
                 "rsa_public_key": payload.public_key,
+                "google_drive_access_token": drive_access_token,
+                "google_drive_refresh_token": drive_refresh_token,
+                "google_drive_token_expiry": token_expiry,
                 "created_at": datetime.utcnow()
             }
             result = await db.users.insert_one(new_user_dict)
             user_id = str(result.inserted_id)
         else:
             user_id = str(user_dict["_id"])
+            from datetime import datetime, timedelta
+            update_fields = {}
             # Update public key if provided on new device
             if payload.public_key and user_dict.get("rsa_public_key") != payload.public_key:
-                await db.users.update_one({"_id": user_dict["_id"]}, {"$set": {"rsa_public_key": payload.public_key}})
+                update_fields["rsa_public_key"] = payload.public_key
+
+            if drive_access_token:
+                update_fields["google_drive_access_token"] = drive_access_token
+            if drive_refresh_token:
+                update_fields["google_drive_refresh_token"] = drive_refresh_token
+            if drive_expires_in:
+                update_fields["google_drive_token_expiry"] = datetime.utcnow() + timedelta(seconds=int(drive_expires_in))
+
+            if update_fields:
+                await db.users.update_one({"_id": user_dict["_id"]}, {"$set": update_fields})
     except PyMongoError as exc:
         raise HTTPException(
             status_code=503,

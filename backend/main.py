@@ -164,7 +164,18 @@ async def get_local_file(
 async def manual_backup_trigger(current_user: auth.UserResponse = Depends(auth.get_current_user)):
     from integrations.google_drive import backup_user_vault
     import asyncio
+    from database.mongodb import get_database
+    from bson import ObjectId
     
+    db = get_database()
+    try:
+        user = await db.users.find_one({"_id": ObjectId(current_user.id)})
+    except Exception:
+        user = await db.users.find_one({"_id": current_user.id})
+
+    if not user or not (user.get("google_drive_refresh_token") or user.get("google_drive_access_token")):
+        raise HTTPException(status_code=400, detail="Google Drive not connected. Please re-login and grant Drive access.")
+
     # We trigger the backup in a background task to prevent blocking the HTTP response
     asyncio.create_task(backup_user_vault(current_user.id))
     return {"message": f"Backup manually triggered successfully for {current_user.id}"}

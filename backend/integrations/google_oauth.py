@@ -54,6 +54,8 @@ async def verify_google_token_with_code(code: str) -> dict:
 
         token_data = token_response.json()
         access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token")
+        expires_in = token_data.get("expires_in")
 
         profile_response = await client.get(
             "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -69,4 +71,7 @@ async def verify_google_token_with_code(code: str) -> dict:
             "email": profile_data.get("email"),
             "name": profile_data.get("name", "Unknown"),
             "picture": profile_data.get("picture"),
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_in": expires_in,
         }
