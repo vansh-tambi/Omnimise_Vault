@@ -12,6 +12,7 @@ import UploadModal from './UploadModal';
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [destructModalMessage, setDestructModalMessage] = useState('');
   const { vaultKey } = useVaultKey();
   const currentKey = vaultKey?.[vaultId];
   const { user } = useAuth();
@@ -122,7 +123,9 @@ export default function VaultView({ vaultId }) {
     } catch (err) {
       console.error('Access failed:', err);
       if (err.response?.status === 410) {
-        alert('This document was permanently destroyed as configured.');
+        const detail = err.response?.data?.detail;
+        const message = typeof detail === 'string' ? detail : 'This document was permanently destroyed.';
+        setDestructModalMessage(message);
         setDocuments(prev => prev.filter(d => d.id !== doc.id));
       } else {
         alert('Failed to access document: ' + (err.response?.data?.detail || err.message));
@@ -243,6 +246,23 @@ export default function VaultView({ vaultId }) {
           onUpload={handleUpload} 
           onClose={() => setShowUploadModal(false)} 
         />
+      )}
+
+      {destructModalMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-xl border border-red-500/40 bg-gray-900 p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-red-300">Document Unavailable</h3>
+            <p className="mt-3 text-sm text-gray-200">{destructModalMessage}</p>
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={() => setDestructModalMessage('')}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white transition hover:bg-red-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

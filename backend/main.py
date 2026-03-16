@@ -32,6 +32,22 @@ def sync_backup_runner():
     loop.run_until_complete(_backup_all())
     loop.close()
 
+
+def sync_expiry_cleanup_runner():
+    """Synchronous wrapper so BackgroundScheduler can trigger async expiry cleanup."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def _cleanup_expired_documents():
+        from services.cleanup_service import run_expiry_cleanup
+        try:
+            await run_expiry_cleanup()
+        except Exception as e:
+            print(f"Expiry cleanup failure: {e}")
+
+    loop.run_until_complete(_cleanup_expired_documents())
+    loop.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_to_mongo()
@@ -39,6 +55,7 @@ async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler()
     # Schedule to run every day at midnight
     scheduler.add_job(sync_backup_runner, 'cron', hour=0, minute=0)
+    scheduler.add_job(sync_expiry_cleanup_runner, 'interval', hours=1)
     scheduler.start()
     
     yield
