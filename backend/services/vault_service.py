@@ -36,14 +36,28 @@ async def check_vault_access(vault_id: str, user_id: str) -> bool:
         if vault:
             return True
         
-        # Check if shared access
-        access = await db.access.find_one({"vault_id": vault_id, "user_id": user_id})
-        if access:
-            return True
+        # Check if shared access via any document in this vault
+        doc_ids = await db.documents.distinct("_id", {"vault_id": vault_id})
+        if doc_ids:
+            doc_id_strings = [str(doc_id) for doc_id in doc_ids]
+            access = await db.access.find_one(
+                {"shared_with": user_id, "document_id": {"$in": doc_id_strings}}
+            )
+            if access:
+                return True
     except Exception:
         # Fallback if vault_id is string
         vault = await db.vaults.find_one({"_id": vault_id, "user_id": user_id})
         if vault:
             return True
+
+        doc_ids = await db.documents.distinct("_id", {"vault_id": vault_id})
+        if doc_ids:
+            doc_id_strings = [str(doc_id) for doc_id in doc_ids]
+            access = await db.access.find_one(
+                {"shared_with": user_id, "document_id": {"$in": doc_id_strings}}
+            )
+            if access:
+                return True
         
     return False

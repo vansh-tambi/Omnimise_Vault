@@ -61,3 +61,13 @@ async def unread_notification_count(current_user: UserResponse = Depends(get_cur
     db = get_database()
     count = await db.notifications.count_documents({"user_id": current_user.id, "read": False})
     return {"count": count}
+
+
+@router.post("/mark_all_read")
+async def mark_all_notifications_read(current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    await db.notifications.update_many(
+        {"user_id": current_user.id, "read": False},
+        {"$set": {"read": True}},
+    )
+    return {"message": "All notifications marked as read"}

@@ -13,7 +13,12 @@ export default function Notifications() {
     setLoading(true);
     try {
       const res = await api.get('/notifications');
-      setNotifications(res.data || []);
+      const items = res.data || [];
+      setNotifications(items);
+      if (items.some((n) => !n.read)) {
+        await api.post('/notifications/mark_all_read');
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to load notifications.');

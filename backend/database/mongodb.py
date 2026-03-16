@@ -8,6 +8,16 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "document_vault")
 LOCAL_FALLBACK_URL = "mongodb://localhost:27017"
 MONGO_TLS_DISABLE_OCSP = os.getenv("MONGO_TLS_DISABLE_OCSP", "true").lower() == "true"
 MONGO_TLS_INSECURE = os.getenv("MONGO_TLS_INSECURE", "false").lower() == "true"
+MONGO_TLS_ENABLED = os.getenv("MONGO_TLS_ENABLED")
+
+
+def _should_enable_tls(uri: str) -> bool:
+    if MONGO_TLS_ENABLED is not None:
+        return MONGO_TLS_ENABLED.lower() == "true"
+    if uri.startswith("mongodb+srv://"):
+        return True
+    lowered = uri.lower()
+    return "tls=true" in lowered or "ssl=true" in lowered
 
 
 def _build_client(uri: str) -> AsyncIOMotorClient:
@@ -17,12 +27,11 @@ def _build_client(uri: str) -> AsyncIOMotorClient:
         "socketTimeoutMS": 10000,
     }
 
-    if uri.startswith("mongodb+srv://") or uri.startswith("mongodb://"):
+    if _should_enable_tls(uri):
         options["tls"] = True
         options["tlsCAFile"] = certifi.where()
         if MONGO_TLS_INSECURE:
-            options["tlsAllowInvalidCertificates"] = True
-            options["tlsAllowInvalidHostnames"] = True
+            options["tlsInsecure"] = True
         elif MONGO_TLS_DISABLE_OCSP:
             options["tlsDisableOCSPEndpointCheck"] = True
 

@@ -8,10 +8,12 @@ import { useAuth } from '../hooks/useAuth';
 import VaultPinPrompt from './VaultPinPrompt';
 import ShareDocument from '../access/ShareDocument';
 import UploadModal from './UploadModal';
+import { Link } from 'react-router-dom';
 
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState('');
   const [destructModalMessage, setDestructModalMessage] = useState('');
   const { vaultKey } = useVaultKey();
   const currentKey = vaultKey?.[vaultId];
@@ -27,7 +29,16 @@ export default function VaultView({ vaultId }) {
       try {
         const res = await api.get(`/documents?vault_id=${vaultId}`);
         setDocuments(res.data);
+        setAccessError('');
       } catch (err) {
+        const status = err.response?.status;
+        if (status === 403) {
+          setAccessError('You do not have access to this vault. If this is a shared document, open it from Shared with Me.');
+        } else if (status === 404) {
+          setAccessError('This vault was not found or has been removed.');
+        } else {
+          setAccessError('Failed to load vault documents. Please try again.');
+        }
         console.error(err);
       } finally {
         setLoading(false);
@@ -179,7 +190,16 @@ export default function VaultView({ vaultId }) {
          </div>
       )}
 
-      {!currentKey ? (
+      {accessError ? (
+        <div className="card text-center p-12 border-dashed border-2 border-gray-700">
+          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-medium text-white mb-2">Vault Unavailable</h3>
+          <p className="text-gray-400 max-w-sm mx-auto">{accessError}</p>
+          <div className="mt-4">
+            <Link to="/access" className="text-blue-400 hover:text-blue-300 underline">Go to Shared with Me</Link>
+          </div>
+        </div>
+      ) : !currentKey ? (
         <div className="card text-center p-16 border-dashed border-2 border-gray-700">
           <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h3 className="text-xl font-medium text-white mb-2">Documents Hidden</h3>
