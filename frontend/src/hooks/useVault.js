@@ -22,20 +22,22 @@ export function useVault() {
   const createVault = async (name, description, pin) => {
     setLoading(true);
     try {
-      // Generate a new random salt for this vault's PIN
-      const saltRaw = crypto.getRandomValues(new Uint8Array(16));
-      // Encode salt as base64 (matching Python's base64.b64decode on the backend)
-      const saltB64 = btoa(String.fromCharCode(...saltRaw));
+      const { deriveVaultKey, encryptFile } = await import('../encryption/crypto.js');
+      const vaultId = crypto.randomUUID();
+      const vaultKey = await deriveVaultKey(pin, vaultId);
+
+      // Encrypt the "verified" string to act as our zero-knowledge PIN checker
+      const encoder = new TextEncoder();
+      const verifiedBuffer = encoder.encode("verified");
+      const encryptedBuffer = await encryptFile(verifiedBuffer, vaultKey);
       
-      // Hash the PIN locally using same algorithm as backend (PBKDF2 → base64)
-      const { hashPIN } = await import('../encryption/crypto.js');
-      const vault_pin_hash = await hashPIN(pin, saltRaw);
+      const pin_verifier = btoa(String.fromCharCode(...new Uint8Array(encryptedBuffer)));
 
       const res = await api.post('/vault/create', { 
+        id: vaultId,
         name, 
         description,
-        vault_pin_hash,
-        vault_pin_salt: saltB64 // Send salt as base64
+        pin_verifier
       });
       
       setVaults(prev => [...prev, res.data]);

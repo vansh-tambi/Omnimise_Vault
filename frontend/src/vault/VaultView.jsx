@@ -58,10 +58,10 @@ export default function VaultView({ vaultId }) {
       const fileBuffer = await file.arrayBuffer();
       const fileHash = await hashFile(fileBuffer);
 
-      const { encrypted, iv } = await encryptFile(file, currentKey);
+      const encryptedBuffer = await encryptFile(fileBuffer, currentKey);
 
-      // Prepend IV to encrypted blob so we can split it on download
-      const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
+      // IV is now encapsulated automatically inside the returning array buffer by crypto.js
+      const encryptedBlob = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
 
       const formData = new FormData();
       formData.append('vault_id', vaultId);
@@ -98,9 +98,8 @@ export default function VaultView({ vaultId }) {
         encryptedBuffer = await fileRes.arrayBuffer();
       }
       
-      const iv = new Uint8Array(encryptedBuffer.slice(0, 12));
-      const data = encryptedBuffer.slice(12);
-      const decrypted = await decryptFile(data, iv, currentKey);
+      // IV unboxing and decryption are now encapsulated in crypto.js
+      const decrypted = await decryptFile(encryptedBuffer, currentKey);
       
       const computedHash = await hashFile(decrypted);
       if (doc.file_hash && computedHash !== doc.file_hash) {

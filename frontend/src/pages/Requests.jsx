@@ -103,8 +103,8 @@ export default function Requests() {
       const fileBuffer = await file.arrayBuffer();
       const fileHash = await hashFile(fileBuffer);
 
-      const { encrypted, iv } = await encryptFile(file, currentVaultKey);
-      const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
+      const encryptedBuffer = await encryptFile(fileBuffer, currentVaultKey);
+      const encryptedBlob = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
 
       const formData = new FormData();
       formData.append('vault_id', selectedVault);

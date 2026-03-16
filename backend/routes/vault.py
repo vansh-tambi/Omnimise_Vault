@@ -18,11 +18,9 @@ async def list_vaults(current_user: UserResponse = Depends(get_current_user)):
     return await get_user_vaults(current_user.id)
 
 @router.post("/{id}/unlock")
-async def unlock_vault(id: str, payload: VaultUnlock, request: Request, current_user: UserResponse = Depends(get_current_user)):
+async def unlock_vault(id: str, request: Request, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
     from bson import ObjectId
-    import hashlib
-    import base64
     
     try:
         vault = await db.vaults.find_one({"_id": ObjectId(id)})
@@ -36,22 +34,9 @@ async def unlock_vault(id: str, payload: VaultUnlock, request: Request, current_
     if not has_access:
         raise HTTPException(status_code=403, detail="Not authorized to access this vault")
     
-    # Verify PIN if it was set
-    if vault.get("vault_pin_hash") and vault.get("vault_pin_salt"):
-        try:
-            salt_bytes = base64.b64decode(vault["vault_pin_salt"])
-            # Use PBKDF2 with SHA-256, 100k iterations, 32 bytes — same as frontend
-            derived_key = hashlib.pbkdf2_hmac('sha256', payload.pin.encode(), salt_bytes, 100000, dklen=32)
-            derived_hash = base64.b64encode(derived_key).decode()
-            print(f"PIN verify: stored_hash={vault['vault_pin_hash'][:16]}... derived={derived_hash[:16]}...")
-            
-            if derived_hash != vault["vault_pin_hash"]:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid vault PIN")
-        except HTTPException:
-            raise  # Pass through auth errors without wrapping
-        except Exception as e:
-            print(f"PIN verification error: {e}")
-            raise HTTPException(status_code=400, detail=f"Failed to verify PIN: {str(e)}")
+    # Server-side PIN hash verification is removed globally.
+    # The frontend now decrypts the pin_verifier string client-side directly
+    # providing full zero-knowledge pin verification.
     
     await log_action(db, current_user.id, "vault_unlocked", request)
     return {"message": "Vault unlocked and logged"}

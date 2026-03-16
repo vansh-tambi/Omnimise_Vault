@@ -10,6 +10,11 @@ async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
     vault_dict["user_id"] = user_id
     vault_dict["created_at"] = datetime.utcnow()
 
+    if vault_dict.get("id"):
+        vault_dict["_id"] = vault_dict.pop("id")
+    else:
+        vault_dict.pop("id", None)
+
     result = await db.vaults.insert_one(vault_dict)
     vault_dict["id"] = str(result.inserted_id)
     return VaultInDB(**vault_dict)

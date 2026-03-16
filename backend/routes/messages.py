@@ -25,7 +25,7 @@ async def send_message(msg: MessageCreate, current_user: UserResponse = Depends(
     msg_dict = {
         "sender_id": current_user.id,
         "receiver_id": msg.receiver_id,
-        "content": msg.content,
+        "encrypted_message": msg.encrypted_message,
         "is_read": False,
     }
     from datetime import datetime

@@ -32,8 +32,8 @@ export default function Access() {
         return;
       }
 
-      // Get private key from local storage (stored during login)
-      const privateKeyBase64 = localStorage.getItem('rsa_private_key');
+      // Get private key from session storage (stored during login)
+      const privateKeyBase64 = sessionStorage.getItem('rsa_private_key');
       if (!privateKeyBase64) {
         alert('Your RSA private key is not available. Please log out and back in.');
         return;
@@ -56,9 +56,7 @@ export default function Access() {
         encryptedBuffer = await fileRes.arrayBuffer();
       }
 
-      const iv = new Uint8Array(encryptedBuffer.slice(0, 12));
-      const data = encryptedBuffer.slice(12);
-      const decrypted = await decryptFile(data, iv, aesKey);
+      const decrypted = await decryptFile(encryptedBuffer, aesKey);
 
       const blob = new Blob([decrypted], { type: docRes.data.content_type || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);

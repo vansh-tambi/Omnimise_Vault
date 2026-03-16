@@ -54,8 +54,9 @@ export default function DigiLockerImport() {
       const rawFile = new File([downloadRes.data], `${doc.name}.pdf`, { type: 'application/pdf' });
       
       // 3. Encrypt entirely client side
-      const { encrypted, iv } = await encryptFile(rawFile, currentKey);
-      const encryptedBlob = new Blob([iv, encrypted], { type: 'application/octet-stream' });
+      const fileBuffer = await rawFile.arrayBuffer();
+      const encryptedBuffer = await encryptFile(fileBuffer, currentKey);
+      const encryptedBlob = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
       
       // 4. Send Ciphertext to standard vault storage
       const formData = new FormData();

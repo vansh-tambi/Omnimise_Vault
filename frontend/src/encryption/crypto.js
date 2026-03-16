@@ -1,50 +1,26 @@
 // frontend/src/encryption/crypto.js
 
-export async function deriveKey(pin, salt) {
-  const enc = new TextEncoder()
-
+export async function deriveVaultKey(pin, vaultId) {
+  const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
-    enc.encode(pin),
+    encoder.encode(pin),
     "PBKDF2",
     false,
     ["deriveKey"]
-  )
-
+  );
   return crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt,
+      salt: encoder.encode(vaultId),
       iterations: 100000,
       hash: "SHA-256"
     },
     keyMaterial,
-    {
-      name: "AES-GCM",
-      length: 256
-    },
-    true, // Must be true so it can be wrapped/shared via RSA
+    { name: "AES-GCM", length: 256 },
+    true,
     ["encrypt", "decrypt"]
-  )
-}
-
-export async function hashPIN(pin, saltBytes) {
-  // Use the same algorithm as backend: PBKDF2-SHA256 100k iterations, 32 bytes, exported as base64
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(pin),
-    'PBKDF2',
-    false,
-    ['deriveBits']
   );
-  const derivedBits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
-    keyMaterial,
-    256 // 32 bytes
-  );
-  // Encode to base64 — same as what Python's base64.b64encode produces
-  return btoa(String.fromCharCode(...new Uint8Array(derivedBits)));
 }
 
 export async function generateRSAKeyPair() {
@@ -167,30 +143,33 @@ export async function unwrapVaultKey(wrappedKeyBase64, privateKey) {
   );
 }
 
-export async function encryptFile(file, key) {
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const data = await file.arrayBuffer()
-
+export async function encryptFile(fileBuffer, aesKey) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
-    key,
-    data
-  )
-
-  return { encrypted, iv }
+    aesKey,
+    fileBuffer
+  );
+  const combined = new Uint8Array(12 + encrypted.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encrypted), 12);
+  return combined.buffer;
 }
 
-export async function decryptFile(encryptedData, iv, key) {
+export async function decryptFile(encryptedBuffer, aesKey) {
+  const data = new Uint8Array(encryptedBuffer);
+  const iv = data.slice(0, 12);
+  const ciphertext = data.slice(12);
   return crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
-    key,
-    encryptedData
-  )
+    aesKey,
+    ciphertext
+  );
 }
 
 export async function hashFile(fileBuffer) {
   const hashBuffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
 }

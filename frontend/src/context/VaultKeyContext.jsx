@@ -1,11 +1,12 @@
 import { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  deriveKey, 
+  deriveVaultKey, 
   generateRSAKeyPair, 
   exportPublicKeyAsBase64, 
   exportPrivateKeyAsBase64,
-  importPrivateKeyFromBase64
+  importPrivateKeyFromBase64,
+  decryptFile
 } from '../encryption/crypto';
 import api from '../services/api';
 
@@ -59,14 +60,34 @@ export function VaultKeyProvider({ children }) {
   }, [vaultKey]);
 
   const unlockVault = async (vaultId, pin) => {
-    // 1. Verify PIN with backend first
-    await api.post(`vault/${vaultId}/unlock`, { pin });
+    // 1. Derive AES key directly from PIN and vaultId
+    const currentVaultKey = await deriveVaultKey(pin, vaultId);
 
-    const enc = new TextEncoder();
-    const salt = enc.encode(vaultId);
-    
-    // 2. Derive AES key from PIN
-    const currentVaultKey = await deriveKey(pin, salt);
+    // 2. Zero-Knowledge validation: Attempt to decrypt pin_verifier using the derived key
+    try {
+      const resp = await api.get('/vault');
+      const vaultData = resp.data.find(v => v.id === vaultId);
+      if (vaultData && vaultData.pin_verifier) {
+        const binaryString = atob(vaultData.pin_verifier);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const decrypted = await decryptFile(bytes.buffer, currentVaultKey);
+        const text = new TextDecoder().decode(decrypted);
+        if (text !== "verified") throw new Error("Invalid PIN");
+      }
+    } catch (err) {
+      throw new Error("Invalid Vault PIN");
+    }
+
+    // 3. Only tell backend to log it *after* we verified it ourselves
+    try {
+      await api.post(`vault/${vaultId}/unlock`);
+    } catch (err) {
+      // ignore
+    }
+
     setVaultKey({ [vaultId]: currentVaultKey });
 
     // 3. Manage RSA Key Pair (fire-and-forget, don't block unlock on failure)

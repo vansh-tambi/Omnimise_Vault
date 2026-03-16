@@ -5,7 +5,7 @@ from typing import Optional
 
 class MessageCreate(BaseModel):
     receiver_id: str  # Target user ID (looked up by email on frontend)
-    content: str
+    encrypted_message: str
 
 
 class MessageInDB(MessageCreate):
@@ -21,7 +21,7 @@ class MessageResponse(BaseModel):
     id: str
     sender_id: str
     receiver_id: str
-    content: str
+    encrypted_message: str
     sent_at: datetime
     is_read: bool
 

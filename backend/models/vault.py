@@ -4,10 +4,10 @@ from datetime import datetime
 
 
 class VaultCreate(BaseModel):
+    id: Optional[str] = None
     name: str
     description: Optional[str] = None
-    vault_pin_hash: str
-    vault_pin_salt: str
+    pin_verifier: str
 
 
 class VaultUnlock(BaseModel):
@@ -18,8 +18,7 @@ class VaultInDB(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    vault_pin_hash: Optional[str] = None
-    vault_pin_salt: Optional[str] = None
+    pin_verifier: Optional[str] = None
     created_at: Optional[datetime] = None
     self_destruct_views: Optional[int] = None
     self_destruct_at: Optional[datetime] = None
@@ -32,8 +31,7 @@ class VaultResponse(BaseModel):
     user_id: str
     name: str
     description: Optional[str] = None
-    vault_pin_hash: Optional[str] = None
-    vault_pin_salt: Optional[str] = None
+    pin_verifier: Optional[str] = None
     created_at: Optional[datetime] = None
     self_destruct_views: Optional[int] = None
     self_destruct_at: Optional[datetime] = None
