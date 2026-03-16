@@ -90,8 +90,7 @@ export default function Messages() {
         return;
       }
 
-      // Look up user by email first
-      const userRes = await api.get(`/access/lookup_user?email=${encodeURIComponent(recipientEmail.trim())}`);
+      const userRes = await api.get(`/access/lookup_user?query=${encodeURIComponent(recipientEmail.trim())}`);
       const receiverId = userRes.data.user_id;
 
       // Encrypt the message text
@@ -116,7 +115,7 @@ export default function Messages() {
       setTab('sent');
     } catch (err) {
       if (err.response?.status === 404) {
-        alert('No user found with that email address.');
+        alert(err.response?.data?.detail || 'No user found with that email or ID.');
       } else {
         alert('Failed to send message: ' + (err.response?.data?.detail || err.message));
       }
@@ -191,13 +190,13 @@ export default function Messages() {
         <div className="card p-6 space-y-4">
           <h2 className="text-lg font-medium text-white">New Message</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient Email</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient Email or Account ID</label>
             <input
-              type="email"
+              type="text"
               value={recipientEmail}
               onChange={e => setRecipientEmail(e.target.value)}
               className="input-field w-full"
-              placeholder="user@example.com"
+              placeholder="user@example.com or 67f1..."
             />
           </div>
           <div>

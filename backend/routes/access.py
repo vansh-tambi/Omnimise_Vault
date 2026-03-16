@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List
+from bson import ObjectId
 from models.user import UserResponse
 from models.access import AccessCreate, AccessResponse, AccessInDB
 from routes.auth import get_current_user
@@ -44,18 +45,28 @@ async def share_access(acc: AccessCreate, request: Request, current_user: UserRe
     return AccessInDB(**acc_dict)
 
 @router.get("/lookup_user")
-async def lookup_user(email: str, current_user: UserResponse = Depends(get_current_user)):
+async def lookup_user(query: str, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
-    user = await db.users.find_one({"email": email})
-    if not user or not user.get("rsa_public_key") or user.get("rsa_public_key") == "undefined":
+    lookup_value = query.strip()
+    user = await db.users.find_one({"email": lookup_value})
+
+    if not user and ObjectId.is_valid(lookup_value):
+        user = await db.users.find_one({"_id": ObjectId(lookup_value)})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="No user found with that email or ID.")
+
+    rsa_public_key = user.get("rsa_public_key")
+    if not rsa_public_key or rsa_public_key == "undefined":
         raise HTTPException(
-            status_code=404, 
-            detail="User not found or has not registered a public key. They must log in at least once."
+            status_code=404,
+            detail="This user has not set up their vault yet. Ask them to log in and unlock their vault first."
         )
     
     return {
         "user_id": str(user["_id"]),
-        "rsa_public_key": user.get("rsa_public_key")
+        "email": user.get("email"),
+        "rsa_public_key": rsa_public_key
     }
 
 @router.get("/list", response_model=List[AccessResponse])

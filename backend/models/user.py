@@ -4,7 +4,9 @@ from datetime import datetime
 
 class UserBase(BaseModel):
     id: Optional[str] = None
+    mongo_id: Optional[str] = Field(default=None, validation_alias="_id", serialization_alias="_id")
     email: EmailStr
+    google_id: Optional[str] = None
     name: str
     picture: Optional[str] = None
     rsa_public_key: Optional[str] = None
