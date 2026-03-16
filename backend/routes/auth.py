@@ -6,6 +6,7 @@ from integrations.google_oauth import verify_google_id_token, verify_google_toke
 from services.auth_service import create_access_token, verify_token
 from database.mongodb import get_database
 from models.user import UserInDB, UserResponse
+from pymongo.errors import PyMongoError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -72,24 +73,33 @@ async def google_login(payload: GoogleAuthPayload):
     
     # check if user exists
     db = get_database()
-    user_dict = await db.users.find_one({"google_id": google_id})
-    if not user_dict:
-        from datetime import datetime
-        new_user_dict = {
-            "google_id": google_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "rsa_public_key": payload.public_key,
-            "created_at": datetime.utcnow()
-        }
-        result = await db.users.insert_one(new_user_dict)
-        user_id = str(result.inserted_id)
-    else:
-        user_id = str(user_dict["_id"])
-        # Update public key if provided on new device
-        if payload.public_key and user_dict.get("rsa_public_key") != payload.public_key:
-            await db.users.update_one({"_id": user_dict["_id"]}, {"$set": {"rsa_public_key": payload.public_key}})
+    try:
+        user_dict = await db.users.find_one({"google_id": google_id})
+        if not user_dict:
+            from datetime import datetime
+            new_user_dict = {
+                "google_id": google_id,
+                "email": email,
+                "name": name,
+                "picture": picture,
+                "rsa_public_key": payload.public_key,
+                "created_at": datetime.utcnow()
+            }
+            result = await db.users.insert_one(new_user_dict)
+            user_id = str(result.inserted_id)
+        else:
+            user_id = str(user_dict["_id"])
+            # Update public key if provided on new device
+            if payload.public_key and user_dict.get("rsa_public_key") != payload.public_key:
+                await db.users.update_one({"_id": user_dict["_id"]}, {"$set": {"rsa_public_key": payload.public_key}})
+    except PyMongoError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Database unavailable. Cannot complete login right now. "
+                "Check MongoDB Atlas network access/IP whitelist or local MongoDB availability."
+            ),
+        ) from exc
         
     # generate jwt
     access_token = create_access_token(data={"sub": user_id})
