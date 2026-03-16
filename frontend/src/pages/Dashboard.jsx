@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useVault } from '../hooks/useVault';
 import VaultCard from '../components/VaultCard';
 import VaultCreate from '../vault/VaultCreate';
@@ -6,6 +7,7 @@ import { LayoutDashboard, Link2, CheckCircle2, Cloud, FileText } from 'lucide-re
 import api from '../services/api';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { vaults, loading, fetchVaults } = useVault();
   const [sharedDocs, setSharedDocs] = useState([]);
   const [showDigiSuccess, setShowDigiSuccess] = useState(false);
@@ -131,7 +133,11 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {sharedDocs.map(share => (
-              <div key={share.access_id} className="card p-5 group hover:border-blue-500/50 transition cursor-pointer" onClick={() => window.location.href=`/vault/${share.document_id}?shared=true`}>
+              <div
+                key={share.access_id}
+                className="card p-5 group hover:border-blue-500/50 transition cursor-pointer"
+                onClick={() => navigate(`/access?docId=${share.document_id}`)}
+              >
                 <div className="flex items-center gap-4 mb-4">
                   <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500/20 transition">
                     <FileText className="w-6 h-6" />

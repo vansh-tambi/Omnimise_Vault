@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Link2, FileText, ShieldCheck, Calendar } from 'lucide-react';
 import api from '../services/api';
 import { useVaultKey } from '../context/VaultKeyContext';
@@ -8,6 +9,8 @@ export default function Access() {
   const [receivedShares, setReceivedShares] = useState([]);
   const [loading, setLoading] = useState(true);
   const { vaultKey } = useVaultKey();
+  const [searchParams] = useSearchParams();
+  const autoOpenRef = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,6 +25,20 @@ export default function Access() {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const docId = searchParams.get('docId');
+    if (!docId || autoOpenRef.current || loading) {
+      return;
+    }
+    const share = receivedShares.find((item) => item.document_id === docId);
+    autoOpenRef.current = true;
+    if (share) {
+      openSharedDoc(share);
+    } else {
+      alert('This shared document is not available to your account.');
+    }
+  }, [receivedShares, searchParams, loading]);
 
   const openSharedDoc = async (share) => {
     try {

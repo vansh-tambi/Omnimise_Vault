@@ -119,7 +119,34 @@ async def get_local_file(
     file_path: str, 
     current_user: auth.UserResponse = Depends(auth.get_current_user)
 ):
-    if not file_path.startswith(current_user.id):
+    from database.mongodb import get_database
+    db = get_database()
+
+    # Allow access if user owns the file path folder
+    if file_path.startswith(current_user.id):
+        allowed = True
+    else:
+        # Allow access for shared documents by matching storage_url
+        allowed = False
+        document = await db.documents.find_one({"storage_url": file_path})
+        if document:
+            document_id_str = str(document.get("_id"))
+            if str(document.get("owner_id")) == current_user.id:
+                allowed = True
+            else:
+                access = await db.access.find_one(
+                    {
+                        "shared_with": current_user.id,
+                        "$or": [
+                            {"document_id": document_id_str},
+                            {"document_id": document.get("_id")},
+                        ],
+                    }
+                )
+                if access:
+                    allowed = True
+
+    if not allowed:
         raise HTTPException(status_code=403, detail="Not authorized to access this file")
         
     local_storage_path = os.path.join(os.path.dirname(__file__), "local_storage", file_path)
