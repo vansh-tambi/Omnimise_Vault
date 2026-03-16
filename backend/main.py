@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from database.mongodb import connect_to_mongo, close_mongo_connection
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
-from routes import auth, vault, documents, requests, access, messages, audit
+from routes import auth, vault, documents, requests, access, messages, audit, notifications
 from integrations import digilocker
 from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
@@ -88,6 +88,7 @@ app.include_router(access.router)
 app.include_router(messages.router)
 app.include_router(digilocker.router)
 app.include_router(audit.router)
+app.include_router(notifications.router)
 
 @app.get("/")
 async def root():

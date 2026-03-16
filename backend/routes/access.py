@@ -6,6 +6,7 @@ from models.access import AccessCreate, AccessResponse, AccessInDB
 from routes.auth import get_current_user
 from database.mongodb import get_database
 from services.audit_service import log_action
+from services.user_lookup import resolve_user_by_email_or_id
 
 router = APIRouter(prefix="/access", tags=["access"])
 
@@ -47,11 +48,7 @@ async def share_access(acc: AccessCreate, request: Request, current_user: UserRe
 @router.get("/lookup_user")
 async def lookup_user(query: str, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
-    lookup_value = query.strip()
-    user = await db.users.find_one({"email": lookup_value})
-
-    if not user and ObjectId.is_valid(lookup_value):
-        user = await db.users.find_one({"_id": ObjectId(lookup_value)})
+    user = await resolve_user_by_email_or_id(db, query)
 
     if not user:
         raise HTTPException(status_code=404, detail="No user found with that email or ID.")

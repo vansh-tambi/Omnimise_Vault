@@ -63,10 +63,20 @@ export function VaultKeyProvider({ children }) {
     // 1. Derive AES key directly from PIN and vaultId
     const currentVaultKey = await deriveVaultKey(pin, vaultId);
 
+    const vaultResp = await api.get(`/vault/${vaultId}`);
+    const vaultData = vaultResp.data;
+
+    if (vaultData?.requires_pin_setup) {
+      await api.post(`/vault/${vaultId}/unlock`, { pin });
+      return {
+        key: currentVaultKey,
+        requiresPinSetup: true,
+        vault: vaultData,
+      };
+    }
+
     // 2. Zero-Knowledge validation: Attempt to decrypt pin_verifier using the derived key
     try {
-      const resp = await api.get('/vault');
-      const vaultData = resp.data.find(v => v.id === vaultId);
       if (vaultData && vaultData.pin_verifier) {
         const binaryString = atob(vaultData.pin_verifier);
         const bytes = new Uint8Array(binaryString.length);
@@ -83,7 +93,7 @@ export function VaultKeyProvider({ children }) {
 
     // 3. Only tell backend to log it *after* we verified it ourselves
     try {
-      await api.post(`vault/${vaultId}/unlock`);
+      await api.post(`vault/${vaultId}/unlock`, { pin });
     } catch (err) {
       // ignore
     }
@@ -126,7 +136,11 @@ export function VaultKeyProvider({ children }) {
       console.warn('RSA key init warning (non-fatal):', rsaErr);
     }
     
-    return currentVaultKey;
+    return {
+      key: currentVaultKey,
+      requiresPinSetup: false,
+      vault: vaultData,
+    };
   };
 
   return (

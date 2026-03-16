@@ -6,7 +6,7 @@ from typing import List
 async def create_vault(vault_data: VaultCreate, user_id: str) -> VaultInDB:
     db = get_database()
     from datetime import datetime
-    vault_dict = vault_data.model_dump()
+    vault_dict = vault_data.model_dump(exclude_none=True)
     vault_dict["user_id"] = user_id
     vault_dict["created_at"] = datetime.utcnow()
 

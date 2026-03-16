@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from typing import List
+from bson import ObjectId
 from models.user import UserResponse
-from models.vault import VaultCreate, VaultResponse, VaultUnlock
+from models.vault import VaultCreate, VaultResponse, VaultUnlock, VaultUpdate
 from services.vault_service import create_vault, get_user_vaults, check_vault_access
 from services.audit_service import log_action
 from database.mongodb import get_database
@@ -17,10 +18,52 @@ async def create_new_vault(vault: VaultCreate, current_user: UserResponse = Depe
 async def list_vaults(current_user: UserResponse = Depends(get_current_user)):
     return await get_user_vaults(current_user.id)
 
-@router.post("/{id}/unlock")
-async def unlock_vault(id: str, request: Request, current_user: UserResponse = Depends(get_current_user)):
+
+@router.get("/{id}", response_model=VaultResponse)
+async def get_vault(id: str, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
-    from bson import ObjectId
+    try:
+        vault = await db.vaults.find_one({"_id": ObjectId(id)})
+    except Exception:
+        vault = await db.vaults.find_one({"_id": id})
+
+    if not vault:
+        raise HTTPException(status_code=404, detail="Vault not found")
+
+    has_access = await check_vault_access(id, current_user.id)
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Not authorized to access this vault")
+
+    vault["id"] = str(vault.pop("_id"))
+    return vault
+
+
+@router.put("/{id}", response_model=VaultResponse)
+async def update_vault(id: str, payload: VaultUpdate, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    try:
+        query = {"_id": ObjectId(id)}
+    except Exception:
+        query = {"_id": id}
+
+    vault = await db.vaults.find_one(query)
+    if not vault:
+        raise HTTPException(status_code=404, detail="Vault not found")
+
+    if str(vault.get("user_id")) != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the vault owner can update this vault")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    if update_data:
+        await db.vaults.update_one(query, {"$set": update_data})
+
+    updated_vault = await db.vaults.find_one(query)
+    updated_vault["id"] = str(updated_vault.pop("_id"))
+    return updated_vault
+
+@router.post("/{id}/unlock")
+async def unlock_vault(id: str, payload: VaultUnlock, request: Request, current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
     
     try:
         vault = await db.vaults.find_one({"_id": ObjectId(id)})
@@ -33,6 +76,12 @@ async def unlock_vault(id: str, request: Request, current_user: UserResponse = D
     has_access = await check_vault_access(id, current_user.id)
     if not has_access:
         raise HTTPException(status_code=403, detail="Not authorized to access this vault")
+
+    if vault.get("requires_pin_setup"):
+        if str(vault.get("user_id")) != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the vault owner can complete PIN setup")
+        if payload.pin != vault.get("temp_pin"):
+            raise HTTPException(status_code=403, detail="Invalid temporary PIN")
     
     # Server-side PIN hash verification is removed globally.
     # The frontend now decrypts the pin_verifier string client-side directly

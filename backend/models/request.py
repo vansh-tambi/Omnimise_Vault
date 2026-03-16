@@ -4,18 +4,23 @@ from datetime import datetime
 
 
 class RequestCreate(BaseModel):
-    target_user_email: str   # Email of the user being asked for a document
-    document_type: str       # Description of what's being requested (e.g. "Passport", "Pay Slip")
+    target_identifier: str
+    document_type: str
+    description: Optional[str] = None
 
 
 class RequestInDB(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
     requester_id: str
-    target_user_id: str      # Resolved from target_user_email on creation
-    target_user_email: str
+    requester_email: str
+    target_user_id: str
     document_type: str
-    status: str = "pending"  # pending, approved, rejected
+    description: Optional[str] = None
+    status: str = "pending"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    fulfilled_vault_id: Optional[str] = None
+    fulfilled_at: Optional[datetime] = None
+    target_user_email: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -23,3 +28,8 @@ class RequestInDB(BaseModel):
 class RequestResponse(RequestInDB):
     id: str
     model_config = ConfigDict(populate_by_name=True)
+
+
+class RequestRespond(BaseModel):
+    request_id: str
+    action: str
