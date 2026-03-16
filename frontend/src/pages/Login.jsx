@@ -10,12 +10,15 @@ export default function Login() {
   const handleSuccess = async (response) => {
     try {
       console.log('Google OAuth response:', response);
-      
-      // flow="auth-code" returns response.code
-      // default credential flow returns response.credential
-      const authCode = response.code || response.credential;
-      
-      if (!authCode) {
+
+      const oauthPayload = {};
+      if (response.credential) {
+        oauthPayload.credential = response.credential;
+      } else if (response.code) {
+        oauthPayload.code = response.code;
+      }
+
+      if (!oauthPayload.credential && !oauthPayload.code) {
         console.error('No auth code or credential in response', response);
         alert('Login failed: No authorization code received.');
         return;
@@ -32,10 +35,10 @@ export default function Login() {
         sessionStorage.setItem('rsa_private_key', privateKey);
       }
       
-      await login(authCode, publicKey);
+      await login(oauthPayload, publicKey);
     } catch (err) {
       console.error('Login failed', err);
-      alert('Login failed. Please try again.');
+      alert(err.response?.data?.detail || 'Login failed. Please try again.');
     }
   };
 
@@ -67,7 +70,6 @@ export default function Login() {
                 shape="rectangular"
                 text="continue_with"
                 width="320"
-                flow="auth-code"
               />
             </div>
           </div>

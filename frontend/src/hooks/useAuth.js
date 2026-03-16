@@ -28,8 +28,8 @@ export function useAuth() {
     checkAuth();
   }, []);
 
-  const login = async (credential, publicKey) => {
-    const response = await api.post('/auth/google', { credential, public_key: publicKey });
+  const login = async (oauthPayload, publicKey) => {
+    const response = await api.post('/auth/google', { ...oauthPayload, public_key: publicKey });
     localStorage.setItem('token', response.data.access_token);
     const userResponse = await api.get('/auth/me');
     setUser(userResponse.data);

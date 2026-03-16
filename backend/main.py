@@ -84,14 +84,17 @@ async def log_requests(request: Request, call_next):
     print(f"Response status: {response.status_code}")
     return response
 
-_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+_frontend_env = os.getenv("FRONTEND_URL", "http://localhost:5173")
+_frontend_urls = [url.strip() for url in _frontend_env.split(",") if url.strip()]
+_default_frontend_urls = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+]
+_allowed_origins = list(dict.fromkeys(_frontend_urls + _default_frontend_urls))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        _frontend_url,
-        "http://localhost:5173",
-        "http://localhost:5174",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
