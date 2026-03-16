@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Download, Share2, ShieldAlert, Trash2, Eye } from 'lucide-react';
+import { FileText, Download, Share2, ShieldAlert, Trash2, Eye, CloudUpload } from 'lucide-react';
 import api from '../services/api';
 import UploadButton from '../components/UploadButton';
 import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey, hashFile } from '../encryption/crypto';
@@ -7,6 +7,7 @@ import { useVaultKey } from '../context/VaultKeyContext';
 import { useAuth } from '../hooks/useAuth';
 import VaultPinPrompt from './VaultPinPrompt';
 import ShareDocument from '../access/ShareDocument';
+import UploadModal from './UploadModal';
 
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
@@ -16,10 +17,9 @@ export default function VaultView({ vaultId }) {
   const { user } = useAuth();
 
   const [sharingDoc, setSharingDoc] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Vault-level self-destruct settings
-  const [vaultSettings, setVaultSettings] = useState({ self_destruct_views: '', self_destruct_at: '' });
-  const [settingsSaving, setSettingsSaving] = useState(false);
+
 
   useEffect(() => {
     const fetchDocs = async () => {
@@ -32,27 +32,10 @@ export default function VaultView({ vaultId }) {
         setLoading(false);
       }
     };
-    const fetchVaultSettings = async () => {
-      try {
-        const vaults = await api.get('/vault');
-        const vault = vaults.data.find(v => v.id === vaultId);
-        if (vault) {
-          setVaultSettings({
-            self_destruct_views: vault.self_destruct_views ?? '',
-            self_destruct_at: vault.self_destruct_at
-              ? new Date(vault.self_destruct_at).toISOString().slice(0, 16)
-              : ''
-          });
-        }
-      } catch (err) {
-        console.error('Could not fetch vault settings', err);
-      }
-    };
     fetchDocs();
-    fetchVaultSettings();
   }, [vaultId]);
 
-  const handleUpload = async (file) => {
+  const handleUpload = async (file, options = {}) => {
     try {
       // Zero-Knowledge Encryption Pipeline
       const fileBuffer = await file.arrayBuffer();
@@ -67,6 +50,9 @@ export default function VaultView({ vaultId }) {
       formData.append('vault_id', vaultId);
       formData.append('file', new File([encryptedBlob], file.name, { type: file.type }));
       formData.append('file_hash', fileHash);
+      
+      if (options.self_destruct_after_views) formData.append('self_destruct_after_views', options.self_destruct_after_views);
+      if (options.self_destruct_at) formData.append('self_destruct_at', options.self_destruct_at);
 
       const res = await api.post('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -160,20 +146,7 @@ export default function VaultView({ vaultId }) {
 
   const handleCloseShare = () => setSharingDoc(null);
 
-  const saveVaultSettings = async () => {
-    setSettingsSaving(true);
-    try {
-      await api.put(`/vault/${vaultId}/settings`, {
-        self_destruct_views: vaultSettings.self_destruct_views !== '' ? parseInt(vaultSettings.self_destruct_views, 10) : null,
-        self_destruct_at: vaultSettings.self_destruct_at ? new Date(vaultSettings.self_destruct_at).toISOString() : null,
-      });
-      alert('Vault security settings saved!');
-    } catch (err) {
-      alert('Failed to save settings: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
+
 
   return (
     <div className="space-y-6">
@@ -185,46 +158,16 @@ export default function VaultView({ vaultId }) {
                {currentKey ? "Vault Unlocked. Operations secure." : "Vault Locked. Downloads will attempt to use shared RSA wrapper."}
             </span>
           </div>
-          {currentKey && <UploadButton onUpload={handleUpload} />}
+          {currentKey && (
+            <button 
+              onClick={() => setShowUploadModal(true)}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 flex items-center gap-2"
+            >
+              <CloudUpload className="w-4 h-4" />
+              Upload Document
+            </button>
+          )}
         </div>
-        
-        {currentKey && (
-          <div className="border-t border-gray-700 pt-4 mt-2">
-            <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">Vault Security Settings</p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-400 mb-1">Self-destruct after N views</label>
-                <input
-                  type="number"
-                  value={vaultSettings.self_destruct_views}
-                  onChange={(e) => setVaultSettings(prev => ({ ...prev, self_destruct_views: e.target.value }))}
-                  className="input-field w-full py-1 text-sm"
-                  placeholder="Optional max views"
-                  min="1"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-400 mb-1">Auto-delete after date</label>
-                <input
-                  type="datetime-local"
-                  value={vaultSettings.self_destruct_at}
-                  onChange={(e) => setVaultSettings(prev => ({ ...prev, self_destruct_at: e.target.value }))}
-                  className="input-field w-full py-1 text-sm text-gray-300"
-                />
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={saveVaultSettings}
-                  disabled={settingsSaving}
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 disabled:opacity-50"
-                >
-                  {settingsSaving ? 'Saving...' : 'Save Settings'}
-                </button>
-              </div>
-            </div>
-            <p className="text-xs text-amber-400/70 mt-2">⚠ These settings apply to the entire vault.</p>
-          </div>
-        )}
       </div>
       
       {!currentKey && (
@@ -292,6 +235,13 @@ export default function VaultView({ vaultId }) {
           document={sharingDoc} 
           currentKey={currentKey} 
           onClose={handleCloseShare} 
+        />
+      )}
+
+      {showUploadModal && (
+        <UploadModal 
+          onUpload={handleUpload} 
+          onClose={() => setShowUploadModal(false)} 
         />
       )}
     </div>

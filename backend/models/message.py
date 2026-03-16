@@ -12,7 +12,8 @@ class MessageInDB(MessageCreate):
     id: Optional[str] = Field(alias="_id", default=None)
     sender_id: str
     sent_at: datetime = Field(default_factory=datetime.utcnow)
-    is_read: bool = False
+    read: bool = False
+    read_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -23,6 +24,7 @@ class MessageResponse(BaseModel):
     receiver_id: str
     encrypted_message: str
     sent_at: datetime
-    is_read: bool
+    read: bool
+    read_at: Optional[datetime] = None
 
     model_config = ConfigDict(populate_by_name=True)

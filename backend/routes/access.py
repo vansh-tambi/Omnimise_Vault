@@ -47,13 +47,14 @@ async def share_access(acc: AccessCreate, request: Request, current_user: UserRe
 async def lookup_user(email: str, current_user: UserResponse = Depends(get_current_user)):
     db = get_database()
     user = await db.users.find_one({"email": email})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    if not user or not user.get("rsa_public_key") or user.get("rsa_public_key") == "undefined":
+        raise HTTPException(
+            status_code=404, 
+            detail="User not found or has not registered a public key. They must log in at least once."
+        )
     
     return {
-        "id": str(user["_id"]),
-        "email": user["email"],
-        "name": user["name"],
+        "user_id": str(user["_id"]),
         "rsa_public_key": user.get("rsa_public_key")
     }
 

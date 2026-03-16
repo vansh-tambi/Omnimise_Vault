@@ -18,7 +18,7 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
     try {
       // Lookup the user by email to get their ID and RSA Public Key
       const userRes = await api.get(`/access/lookup_user?email=${encodeURIComponent(recipientEmail)}`);
-      const { id: recipientId, rsa_public_key } = userRes.data;
+      const { user_id: recipientId, rsa_public_key } = userRes.data;
 
       if (!rsa_public_key || rsa_public_key === 'undefined') {
         alert("This user has not initialized their RSA keys. They need to log in and unlock a vault first.");

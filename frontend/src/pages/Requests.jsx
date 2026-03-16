@@ -10,7 +10,7 @@ import { encryptFile, hashFile } from '../encryption/crypto';
 export default function Requests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { vaultKey } = useVaultKey();
+  const { vaultKey, setVaultKey } = useVaultKey();
 
   // New request form
   const [showForm, setShowForm] = useState(false);
@@ -283,7 +283,10 @@ export default function Requests() {
 
             {selectedVault && !currentVaultKey && (
               <div className="mt-4 border border-amber-500/20 rounded-lg p-2 bg-gray-800">
-                <VaultPinPrompt vaultId={selectedVault} onKeyDerived={() => {}} />
+                <VaultPinPrompt 
+                  vaultId={selectedVault} 
+                  onKeyDerived={(key) => setVaultKey(prev => ({ ...prev, [selectedVault]: key }))} 
+                />
               </div>
             )}
 

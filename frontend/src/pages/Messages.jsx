@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { MessageSquare, Send, Inbox, CheckCheck } from 'lucide-react';
+import { MessageSquare, Send, Inbox, CheckCheck, Lock } from 'lucide-react';
+import { useVaultKey } from '../context/VaultKeyContext';
+import { useVault } from '../hooks/useVault';
+import VaultPinPrompt from '../vault/VaultPinPrompt';
+import { encryptFile, decryptFile } from '../encryption/crypto';
 
 export default function Messages() {
   const [tab, setTab] = useState('inbox'); // 'inbox' | 'sent' | 'compose'
@@ -12,11 +16,27 @@ export default function Messages() {
   const [messageContent, setMessageContent] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Vault context for E2E encryption
+  const { vaultKey } = useVaultKey();
+  const { vaults } = useVault();
+  const [selectedVault, setSelectedVault] = useState('');
+
+  // Fetch user vaults on mount
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 10000);
+    api.get('/vault').then(r => setSelectedVault(r.data[0]?.id)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (selectedVault && vaultKey?.[selectedVault]) {
+      fetchMessages();
+    }
+    const interval = setInterval(() => {
+      if (selectedVault && vaultKey?.[selectedVault]) {
+        fetchMessages();
+      }
+    }, 5000);
     return () => clearInterval(interval);
-  }, [tab]);
+  }, [tab, selectedVault, vaultKey]);
 
   const fetchMessages = async () => {
     setLoading(true);
@@ -24,7 +44,31 @@ export default function Messages() {
       const endpoint = tab === 'sent' ? '/messages/sent' : '/messages/inbox';
       if (tab === 'compose') { setLoading(false); return; }
       const res = await api.get(endpoint);
-      setMessages(res.data);
+      
+      const currentVaultKey = vaultKey?.[selectedVault];
+      if (!currentVaultKey) {
+        setMessages([]);
+        return;
+      }
+
+      // Decrypt messages
+      const decryptedMsgs = await Promise.all(res.data.map(async (msg) => {
+        try {
+          const binaryString = atob(msg.encrypted_message);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const decryptedBuffer = await decryptFile(bytes.buffer, currentVaultKey);
+          const plaintext = new TextDecoder().decode(decryptedBuffer);
+          return { ...msg, content: plaintext };
+        } catch (e) {
+          console.error("Failed to decrypt message", e);
+          return { ...msg, content: "[Encrypted Message - Unlock Vault to View]" };
+        }
+      }));
+
+      setMessages(decryptedMsgs);
     } catch (err) {
       console.error(err);
     } finally {
@@ -39,10 +83,33 @@ export default function Messages() {
     }
     setSending(true);
     try {
+      const currentVaultKey = vaultKey?.[selectedVault];
+      if (!currentVaultKey) {
+        alert("Unlock your vault first to encrypt the message.");
+        setSending(false);
+        return;
+      }
+
       // Look up user by email first
       const userRes = await api.get(`/access/lookup_user?email=${encodeURIComponent(recipientEmail.trim())}`);
-      const receiverId = userRes.data.id;
-      await api.post('/messages/send', { receiver_id: receiverId, content: messageContent.trim() });
+      const receiverId = userRes.data.user_id;
+
+      // Encrypt the message text
+      const messageBuffer = new TextEncoder().encode(messageContent.trim());
+      const encryptedBuffer = await encryptFile(messageBuffer, currentVaultKey);
+      
+      // Convert buffer to base64 string
+      const encryptedBytes = new Uint8Array(encryptedBuffer);
+      let binaryString = '';
+      for (let i = 0; i < encryptedBytes.byteLength; i++) {
+        binaryString += String.fromCharCode(encryptedBytes[i]);
+      }
+      const encryptedMessageBase64 = btoa(binaryString);
+
+      await api.post('/messages/send', { 
+        receiver_id: receiverId, 
+        encrypted_message: encryptedMessageBase64 
+      });
       alert('Message sent!');
       setRecipientEmail('');
       setMessageContent('');
@@ -61,7 +128,7 @@ export default function Messages() {
   const markRead = async (msgId) => {
     try {
       await api.post(`/messages/mark_read/${msgId}`);
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_read: true } : m));
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, read: true } : m));
     } catch (_) {}
   };
 
@@ -73,12 +140,35 @@ export default function Messages() {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 border-b border-gray-700 pb-4">
-        <MessageSquare className="w-6 h-6 text-gray-300" />
-        <h1 className="text-2xl font-semibold text-white">Messages</h1>
+      <div className="flex items-center justify-between border-b border-gray-700 pb-4">
+        <div className="flex items-center gap-3">
+          <MessageSquare className="w-6 h-6 text-gray-300" />
+          <h1 className="text-2xl font-semibold text-white">Secure Messages</h1>
+        </div>
+        
+        {vaults?.length > 0 && (
+          <div className="flex gap-2 items-center">
+            <Lock className="w-4 h-4 text-blue-400" />
+            <select
+               value={selectedVault}
+               onChange={e => setSelectedVault(e.target.value)}
+               className="input-field py-1 px-3 text-sm bg-gray-800"
+            >
+              {vaults.map(v => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {/* Tab Bar */}
+      {selectedVault && !vaultKey?.[selectedVault] ? (
+        <div className="pt-8">
+           <VaultPinPrompt vaultId={selectedVault} onKeyDerived={() => fetchMessages()} />
+        </div>
+      ) : (
+      <>
+        {/* Tab Bar */}
       <div className="flex gap-1 bg-gray-800/50 p-1 rounded-lg w-fit border border-gray-700">
         {tabs.map(t => (
           <button
@@ -147,14 +237,14 @@ export default function Messages() {
             {messages.map(msg => (
               <div
                 key={msg.id}
-                onClick={() => tab === 'inbox' && !msg.is_read && markRead(msg.id)}
+                onClick={() => tab === 'inbox' && !msg.read && markRead(msg.id)}
                 className={`card p-4 border-l-4 cursor-pointer transition hover:bg-gray-800/70 ${
-                  !msg.is_read && tab === 'inbox' ? 'border-l-blue-500 bg-blue-500/5' : 'border-l-gray-700'
+                  !msg.read && tab === 'inbox' ? 'border-l-blue-500 bg-blue-500/5' : 'border-l-gray-700'
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
-                    {!msg.is_read && tab === 'inbox' && (
+                    {!msg.read && tab === 'inbox' && (
                       <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                     )}
                     <span className="text-sm font-medium text-blue-400">
@@ -172,6 +262,8 @@ export default function Messages() {
             ))}
           </div>
         )
+      )}
+      </>
       )}
     </div>
   );

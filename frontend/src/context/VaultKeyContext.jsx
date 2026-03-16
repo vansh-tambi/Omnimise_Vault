@@ -88,7 +88,7 @@ export function VaultKeyProvider({ children }) {
       // ignore
     }
 
-    setVaultKey({ [vaultId]: currentVaultKey });
+    setVaultKey(prev => ({ ...prev, [vaultId]: currentVaultKey }));
 
     // 3. Manage RSA Key Pair (fire-and-forget, don't block unlock on failure)
     try {

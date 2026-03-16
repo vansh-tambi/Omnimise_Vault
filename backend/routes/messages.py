@@ -26,7 +26,8 @@ async def send_message(msg: MessageCreate, current_user: UserResponse = Depends(
         "sender_id": current_user.id,
         "receiver_id": msg.receiver_id,
         "encrypted_message": msg.encrypted_message,
-        "is_read": False,
+        "read": False,
+        "read_at": None,
     }
     from datetime import datetime
     msg_dict["sent_at"] = datetime.utcnow()
@@ -66,7 +67,8 @@ async def mark_read(message_id: str, current_user: UserResponse = Depends(get_cu
     except Exception:
         query = {"_id": message_id, "receiver_id": current_user.id}
 
-    result = await db.messages.update_one(query, {"$set": {"is_read": True}})
+    from datetime import datetime
+    result = await db.messages.update_one(query, {"$set": {"read": True, "read_at": datetime.utcnow()}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Message not found or not authorized")
     return {"message": "Marked as read"}
