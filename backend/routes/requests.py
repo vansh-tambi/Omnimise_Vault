@@ -19,6 +19,9 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 
 def serialize_request(document: dict) -> RequestInDB:
     document["_id"] = str(document["_id"])
+    document.setdefault("requester_email", None)
+    document.setdefault("target_user_email", None)
+    document.setdefault("description", None)
     return RequestInDB(**document)
 
 

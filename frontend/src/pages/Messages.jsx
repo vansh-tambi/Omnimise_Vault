@@ -2,9 +2,34 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { MessageSquare, Send, Inbox, CheckCheck, Lock } from 'lucide-react';
 import { useVaultKey } from '../context/VaultKeyContext';
+import { useAuth } from '../hooks/useAuth';
 import { useVault } from '../hooks/useVault';
 import VaultPinPrompt from '../vault/VaultPinPrompt';
-import { encryptFile, decryptFile } from '../encryption/crypto';
+import {
+  encryptFile,
+  decryptFile,
+  importPublicKeyFromBase64,
+  wrapVaultKey,
+  unwrapVaultKey,
+} from '../encryption/crypto';
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 export default function Messages() {
   const [tab, setTab] = useState('inbox'); // 'inbox' | 'sent' | 'compose'
@@ -17,7 +42,8 @@ export default function Messages() {
   const [sending, setSending] = useState(false);
 
   // Vault context for E2E encryption
-  const { vaultKey } = useVaultKey();
+  const { vaultKey, rsaPrivateKey } = useVaultKey();
+  const { user } = useAuth();
   const { vaults } = useVault();
   const [selectedVault, setSelectedVault] = useState('');
 
@@ -27,16 +53,16 @@ export default function Messages() {
   }, []);
 
   useEffect(() => {
-    if (selectedVault && vaultKey?.[selectedVault]) {
+    if (selectedVault) {
       fetchMessages();
     }
     const interval = setInterval(() => {
-      if (selectedVault && vaultKey?.[selectedVault]) {
+      if (selectedVault) {
         fetchMessages();
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [tab, selectedVault, vaultKey]);
+  }, [tab, selectedVault, vaultKey, rsaPrivateKey]);
 
   const fetchMessages = async () => {
     setLoading(true);
@@ -46,15 +72,38 @@ export default function Messages() {
       const res = await api.get(endpoint);
       
       const currentVaultKey = vaultKey?.[selectedVault];
-      if (!currentVaultKey) {
-        setMessages([]);
-        return;
-      }
+      const currentPrivateKey = rsaPrivateKey;
 
       // Decrypt messages
       const decryptedMsgs = await Promise.all(res.data.map(async (msg) => {
         try {
-          const binaryString = atob(msg.encrypted_message);
+          const rawEncrypted = (msg.encrypted_message || '').trim();
+
+          if (rawEncrypted.startsWith('{')) {
+            const payload = JSON.parse(rawEncrypted);
+            const wrappedKeyForRecipient = payload?.wrapped_key;
+            const wrappedKeyForSender = payload?.wrapped_key_sender;
+            const ciphertextB64 = payload?.ciphertext;
+
+            const isRecipient = user?.id && msg.receiver_id === user.id;
+            const wrappedKey = isRecipient ? wrappedKeyForRecipient : wrappedKeyForSender;
+
+            if (!wrappedKey || !ciphertextB64 || !currentPrivateKey) {
+              return { ...msg, content: '[Encrypted Message - Unlock Vault to View]' };
+            }
+
+            const aesKey = await unwrapVaultKey(wrappedKey, currentPrivateKey);
+            const encryptedBuffer = base64ToArrayBuffer(ciphertextB64);
+            const decryptedBuffer = await decryptFile(encryptedBuffer, aesKey);
+            const plaintext = new TextDecoder().decode(decryptedBuffer);
+            return { ...msg, content: plaintext };
+          }
+
+          if (!currentVaultKey) {
+            return { ...msg, content: '[Encrypted Message - Unlock Vault to View]' };
+          }
+
+          const binaryString = atob(rawEncrypted);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
@@ -83,31 +132,42 @@ export default function Messages() {
     }
     setSending(true);
     try {
-      const currentVaultKey = vaultKey?.[selectedVault];
-      if (!currentVaultKey) {
-        alert("Unlock your vault first to encrypt the message.");
-        setSending(false);
-        return;
-      }
-
       const userRes = await api.get(`/access/lookup_user?query=${encodeURIComponent(recipientEmail.trim())}`);
       const receiverId = userRes.data.user_id;
+      const recipientPublicKeyBase64 = userRes.data.rsa_public_key;
 
-      // Encrypt the message text
+      const recipientPublicKey = await importPublicKeyFromBase64(recipientPublicKeyBase64);
+
+      const meRes = user?.rsa_public_key ? { data: user } : await api.get('/auth/me');
+      const senderPublicKeyBase64 = meRes.data?.rsa_public_key;
+      const senderPublicKey = senderPublicKeyBase64
+        ? await importPublicKeyFromBase64(senderPublicKeyBase64)
+        : null;
+
       const messageBuffer = new TextEncoder().encode(messageContent.trim());
-      const encryptedBuffer = await encryptFile(messageBuffer, currentVaultKey);
-      
-      // Convert buffer to base64 string
-      const encryptedBytes = new Uint8Array(encryptedBuffer);
-      let binaryString = '';
-      for (let i = 0; i < encryptedBytes.byteLength; i++) {
-        binaryString += String.fromCharCode(encryptedBytes[i]);
-      }
-      const encryptedMessageBase64 = btoa(binaryString);
+      const aesKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      const encryptedBuffer = await encryptFile(messageBuffer, aesKey);
+      const ciphertextBase64 = arrayBufferToBase64(encryptedBuffer);
+
+      const wrappedKeyForRecipient = await wrapVaultKey(aesKey, recipientPublicKey);
+      const wrappedKeyForSender = senderPublicKey
+        ? await wrapVaultKey(aesKey, senderPublicKey)
+        : null;
+
+      const payload = {
+        v: 1,
+        ciphertext: ciphertextBase64,
+        wrapped_key: wrappedKeyForRecipient,
+        wrapped_key_sender: wrappedKeyForSender,
+      };
 
       await api.post('/messages/send', { 
         receiver_id: receiverId, 
-        encrypted_message: encryptedMessageBase64 
+        encrypted_message: JSON.stringify(payload)
       });
       alert('Message sent!');
       setRecipientEmail('');
@@ -161,13 +221,9 @@ export default function Messages() {
         )}
       </div>
 
-      {selectedVault && !vaultKey?.[selectedVault] ? (
-        <div className="pt-8">
-           <VaultPinPrompt vaultId={selectedVault} onKeyDerived={() => fetchMessages()} />
-        </div>
-      ) : (
-      <>
-        {/* Tab Bar */}
+      {/* Vault unlock prompt removed for messaging view */}
+
+      {/* Tab Bar */}
       <div className="flex gap-1 bg-gray-800/50 p-1 rounded-lg w-fit border border-gray-700">
         {tabs.map(t => (
           <button
@@ -261,8 +317,6 @@ export default function Messages() {
             ))}
           </div>
         )
-      )}
-      </>
       )}
     </div>
   );

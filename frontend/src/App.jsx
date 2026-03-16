@@ -11,7 +11,6 @@ import Messages from './pages/Messages';
 import DigiLockerImport from './pages/DigiLockerImport';
 import AuditLog from './pages/AuditLog';
 import Profile from './pages/Profile';
-import Notifications from './pages/Notifications';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -48,7 +47,6 @@ export default function App() {
               <Route path="/digilocker-import" element={<ProtectedRoute><DigiLockerImport /></ProtectedRoute>} />
               <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
             </Routes>
           </main>
         </div>

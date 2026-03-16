@@ -12,7 +12,7 @@ class RequestCreate(BaseModel):
 class RequestInDB(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
     requester_id: str
-    requester_email: str
+    requester_email: Optional[str] = None
     target_user_id: str
     document_type: str
     description: Optional[str] = None
