@@ -10,8 +10,50 @@ from services.audit_service import log_action
 import os
 from datetime import datetime
 from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
+import io
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+async def _get_authorized_document(db, document_id: str, current_user: UserResponse):
+    from bson import ObjectId
+
+    try:
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+    except Exception:
+        document = await db.documents.find_one({"_id": document_id})
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document_id_str = str(document["_id"])
+
+    owner_access = False
+    try:
+        owner_access = await db.vaults.find_one({"_id": ObjectId(document["vault_id"]), "user_id": current_user.id}) is not None
+    except Exception:
+        owner_access = await db.vaults.find_one({"_id": document["vault_id"], "user_id": current_user.id}) is not None
+
+    valid_access_record = await db.access.find_one(
+        {
+            "shared_with": current_user.id,
+            "$or": [
+                {"document_id": document_id_str},
+                {"document_id": document_id}
+            ]
+        }
+    )
+
+    if valid_access_record:
+        expires_at = valid_access_record.get("expires_at")
+        if expires_at and expires_at <= datetime.utcnow():
+            valid_access_record = None
+
+    if not owner_access and not valid_access_record:
+        raise HTTPException(status_code=403, detail="Not authorized to access this document")
+
+    return document
 
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_file(
@@ -81,44 +123,12 @@ async def list_documents(vault_id: str, current_user: UserResponse = Depends(get
 @router.get("/{id}")
 async def get_document(id: str, request: Request, current_user: UserResponse = Depends(get_current_user)):
     from database.mongodb import get_database
-    from bson import ObjectId
     db = get_database()
 
     # Step 1: fetch the document from MongoDB. If not found return 404.
-    try:
-        document = await db.documents.find_one({"_id": ObjectId(id)})
-    except Exception:
-        document = await db.documents.find_one({"_id": id})
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await _get_authorized_document(db, id, current_user)
 
     document_id_str = str(document["_id"])
-
-    # Step 2: verify requester is owner or has valid non-expired access.
-    owner_access = False
-    try:
-        owner_access = await db.vaults.find_one({"_id": ObjectId(document["vault_id"]), "user_id": current_user.id}) is not None
-    except Exception:
-        owner_access = await db.vaults.find_one({"_id": document["vault_id"], "user_id": current_user.id}) is not None
-
-    valid_access_record = await db.access.find_one(
-        {
-            "shared_with": current_user.id,
-            "$or": [
-                {"document_id": document_id_str},
-                {"document_id": id}
-            ]
-        }
-    )
-
-    if valid_access_record:
-        expires_at = valid_access_record.get("expires_at")
-        if expires_at and expires_at <= datetime.utcnow():
-            valid_access_record = None
-
-    if not owner_access and not valid_access_record:
-        raise HTTPException(status_code=403, detail="Not authorized to access this document")
 
     # Step 3: check self-destruct before incrementing view count.
     destruction_reason = await enforce_self_destruct(document, db)
@@ -146,7 +156,11 @@ async def get_document(id: str, request: Request, current_user: UserResponse = D
             )
 
     # Step 7: generate and return signed URL/local URL normally.
-    temporary_url = generate_signed_url(updated_document["storage_url"], expiry_minutes=15)
+    storage_ref = updated_document.get("storage_url", "")
+    if str(storage_ref).startswith("drive:"):
+        temporary_url = f"/documents/{document_id_str}/download"
+    else:
+        temporary_url = generate_signed_url(storage_ref, expiry_minutes=15)
     
     await log_action(db, current_user.id, "file_downloaded", request, document_id=document_id_str)
         
@@ -157,6 +171,32 @@ async def get_document(id: str, request: Request, current_user: UserResponse = D
         "size_bytes": updated_document["size_bytes"],
         "storage_url": temporary_url
     }
+
+
+@router.get("/{id}/download")
+async def download_document_bytes(id: str, current_user: UserResponse = Depends(get_current_user)):
+    """Authenticated proxy endpoint used for Drive-backed document blobs."""
+    from database.mongodb import get_database
+    db = get_database()
+
+    document = await _get_authorized_document(db, id, current_user)
+    storage_ref = document.get("storage_url", "")
+
+    if not str(storage_ref).startswith("drive:"):
+        raise HTTPException(status_code=400, detail="Direct download proxy is only used for Drive-backed files")
+
+    from integrations.google_drive import download_drive_file_bytes
+
+    try:
+        file_bytes = await download_drive_file_bytes(storage_ref)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch file from Google Drive: {str(e)}")
+
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=document.get("content_type") or "application/octet-stream",
+        headers={"Content-Disposition": f"inline; filename={document.get('filename', 'document.enc')}"},
+    )
 
 async def enforce_self_destruct(document, db):
     now = datetime.utcnow()
@@ -184,7 +224,13 @@ async def hard_delete_document(document, db):
     document_id_raw = document["_id"]
     document_id_str = str(document["_id"])
 
-    if os.getenv("GCS_ENABLED", "true").lower() == "true":
+    if str(storage_url).startswith("drive:"):
+        try:
+            from integrations.google_drive import delete_drive_file
+            await delete_drive_file(storage_url)
+        except Exception:
+            pass
+    elif os.getenv("GCS_ENABLED", "true").lower() == "true":
         try:
             from integrations.gcs_storage import get_gcs_client
             client = get_gcs_client()
@@ -223,7 +269,13 @@ async def _delete_document_storage_and_records(document, db):
     document_id_raw = document["_id"]
     document_id_str = str(document["_id"])
 
-    if os.getenv("GCS_ENABLED", "true").lower() == "true":
+    if str(storage_url).startswith("drive:"):
+        try:
+            from integrations.google_drive import delete_drive_file
+            await delete_drive_file(storage_url)
+        except Exception:
+            pass
+    elif os.getenv("GCS_ENABLED", "true").lower() == "true":
         try:
             from integrations.gcs_storage import get_gcs_client
             client = get_gcs_client()

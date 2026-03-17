@@ -174,7 +174,10 @@ async def manual_backup_trigger(current_user: auth.UserResponse = Depends(auth.g
         user = await db.users.find_one({"_id": current_user.id})
 
     if not user or not (user.get("google_drive_refresh_token") or user.get("google_drive_access_token")):
-        raise HTTPException(status_code=400, detail="Google Drive not connected. Please re-login and grant Drive access.")
+        raise HTTPException(
+            status_code=400,
+            detail="Google Drive not connected. Use the 'Connect Drive' button in Dashboard first."
+        )
 
     # We trigger the backup in a background task to prevent blocking the HTTP response
     asyncio.create_task(backup_user_vault(current_user.id))

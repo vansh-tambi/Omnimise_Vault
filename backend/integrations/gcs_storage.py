@@ -39,7 +39,9 @@ async def upload_document(file_content: bytes, user_id: str, filename: str) -> s
 
 async def upload_encrypted_file(file_content: bytes, user_id: str, filename: str) -> str:
     if not GCS_ENABLED:
-        return upload_file_local(user_id, filename, file_content)
+        # New fallback: store encrypted blobs in user's Google Drive instead of local disk.
+        from integrations.google_drive import upload_encrypted_file_to_user_drive
+        return await upload_encrypted_file_to_user_drive(user_id, filename, file_content)
 
     client = get_gcs_client()
     bucket = client.bucket(GCS_BUCKET_NAME)
@@ -64,6 +66,9 @@ def download_encrypted_file(storage_url: str) -> bytes:
 
 def generate_signed_url(blob_path: str, expiry_minutes: int = 15) -> str:
     if not GCS_ENABLED:
+        # For Drive-backed storage, documents are served through authenticated proxy routes.
+        if str(blob_path).startswith("drive:"):
+            return ""
         return f"http://localhost:8000/local-files/{blob_path}"
 
     client = get_gcs_client()
