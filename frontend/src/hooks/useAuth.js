@@ -19,8 +19,12 @@ export function useAuth() {
         setUser(response.data);
       } catch (err) {
         console.error('Auth check failed', err);
-        localStorage.removeItem('token');
-        setUser(null);
+        // Only hard-logout when token is actually invalid/expired.
+        // For transient API/network errors, keep the current session state.
+        if (err.response?.status === 401) {
+          localStorage.removeItem('token');
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }

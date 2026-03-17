@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { UserCheck, Check, X, Plus, Send, Clock, Inbox, SendHorizontal } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import ApproveShareModal from '../vault/ApproveShareModal';
 
 export default function Requests() {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ export default function Requests() {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [respondingId, setRespondingId] = useState(null);
+  const [approvingRequest, setApprovingRequest] = useState(null);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -88,13 +90,10 @@ export default function Requests() {
     setRespondingId(requestId);
     try {
       const res = await api.post('/requests/respond', { request_id: requestId, action });
-      if (action === 'approved') {
-        alert('Request approved. The requester has been notified with vault access.');
-      }
       if (action === 'rejected') {
         alert('Request rejected.');
       }
-      if (res?.data?.message && action !== 'approved' && action !== 'rejected') {
+      if (res?.data?.message && action !== 'rejected') {
         alert(res.data.message);
       }
       fetchRequests();
@@ -103,6 +102,16 @@ export default function Requests() {
     } finally {
       setRespondingId(null);
     }
+  };
+
+  const handleApproveModalDone = (result, filename, recipientEmail) => {
+    setApprovingRequest(null);
+    if (result === 'approved-with-share') {
+      alert(`Request approved and "${filename}" shared securely with ${recipientEmail}.`);
+    } else if (result === 'approved-only') {
+      alert('Request approved. The requester has been notified with vault access.');
+    }
+    fetchRequests();
   };
 
   const rows = activeTab === 'incoming' ? incomingRequests : outgoingRequests;
@@ -259,7 +268,7 @@ export default function Requests() {
                 {isPendingIncoming && (
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => handleRespond(req.id, 'approved')}
+                      onClick={() => setApprovingRequest(req)}
                       disabled={respondingId === req.id}
                       className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 hover:bg-green-500/20 rounded-lg text-sm transition disabled:opacity-50"
                     >
@@ -280,6 +289,14 @@ export default function Requests() {
             );
           })}
         </div>
+      )}
+
+      {approvingRequest && (
+        <ApproveShareModal
+          request={approvingRequest}
+          onClose={() => setApprovingRequest(null)}
+          onApproved={handleApproveModalDone}
+        />
       )}
     </div>
   );

@@ -24,15 +24,15 @@ export default function Login() {
         return;
       }
 
-      let publicKey = sessionStorage.getItem('rsa_public_key');
-      let privateKey = sessionStorage.getItem('rsa_private_key');
+      let publicKey = localStorage.getItem('rsa_public_key');
+      let privateKey = localStorage.getItem('rsa_private_key');
       
       if (!publicKey || !privateKey) {
         const keyPair = await generateRSAKeyPair();
         publicKey = await exportPublicKeyAsBase64(keyPair.publicKey);
         privateKey = await exportPrivateKeyAsBase64(keyPair.privateKey);
-        sessionStorage.setItem('rsa_public_key', publicKey);
-        sessionStorage.setItem('rsa_private_key', privateKey);
+        localStorage.setItem('rsa_public_key', publicKey);
+        localStorage.setItem('rsa_private_key', privateKey);
       }
       
       await login(oauthPayload, publicKey);

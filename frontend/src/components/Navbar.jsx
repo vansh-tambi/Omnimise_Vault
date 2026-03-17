@@ -1,9 +1,12 @@
-import { Shield, LogOut, Activity, MessageSquare, ClipboardList } from 'lucide-react';
+import { Shield, LogOut, Activity, MessageSquare, ClipboardList, Share2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Link } from 'react-router-dom';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const hasSession = !!localStorage.getItem('token');
+  const displayName = user?.name || 'Account';
+  const displayPicture = user?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
 
   return (
     <nav className="h-16 w-full shrink-0 border-b border-gray-700 bg-dark-bg flex items-center justify-between px-6 sticky top-0 z-50">
@@ -14,8 +17,11 @@ export default function Navbar() {
         </span>
       </Link>
       
-      {user && (
+      {hasSession && (
         <div className="flex items-center gap-4">
+          <Link to="/access" className="p-2 hover:bg-gray-800 rounded-full transition" title="Shared Documents">
+            <Share2 className="w-5 h-5 text-gray-300" />
+          </Link>
           <Link to="/requests" className="p-2 hover:bg-gray-800 rounded-full transition relative" title="Requests">
             <ClipboardList className="w-5 h-5 text-gray-300" />
           </Link>
@@ -28,12 +34,12 @@ export default function Navbar() {
           <div className="flex items-center gap-3 border-l border-gray-700 pl-4 ml-2">
             <Link to="/profile" title="Profile">
               <img 
-                src={user.picture || `https://ui-avatars.com/api/?name=${user.name}&background=random`} 
-                alt={user.name} 
+                src={displayPicture}
+                alt={displayName}
                 className="w-8 h-8 rounded-full border border-gray-600"
               />
             </Link>
-            <span className="text-sm font-medium hidden md:block">{user.name}</span>
+            <span className="text-sm font-medium hidden md:block">{displayName}</span>
             <button onClick={logout} className="p-2 hover:bg-gray-800 text-gray-400 hover:text-white rounded-full transition" title="Logout">
               <LogOut className="w-4 h-4" />
             </button>

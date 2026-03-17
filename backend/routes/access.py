@@ -85,6 +85,44 @@ async def list_access(document_id: str, current_user: UserResponse = Depends(get
         acts.append(AccessInDB(**document))
     return acts
 
+@router.get("/sent")
+async def list_sent_shares(current_user: UserResponse = Depends(get_current_user)):
+    db = get_database()
+    from datetime import datetime
+    from bson import ObjectId
+
+    cursor = db.access.find({"owner_id": current_user.id}).sort("granted_at", -1)
+    results = []
+    async for share in cursor:
+        doc_id = share["document_id"]
+        try:
+            doc = await db.documents.find_one({"_id": ObjectId(doc_id)})
+        except Exception:
+            doc = await db.documents.find_one({"_id": doc_id})
+
+        shared_with_id = share.get("shared_with")
+        recipient_email = None
+        if shared_with_id:
+            try:
+                recipient = await db.users.find_one({"_id": ObjectId(shared_with_id)})
+                if recipient:
+                    recipient_email = recipient.get("email")
+            except Exception:
+                pass
+
+        if doc:
+            results.append({
+                "access_id": str(share["_id"]),
+                "document_id": doc_id,
+                "filename": doc["filename"],
+                "shared_with": shared_with_id,
+                "shared_with_email": recipient_email,
+                "granted_at": share["granted_at"],
+                "expires_at": share.get("expires_at"),
+            })
+    return results
+
+
 @router.get("/received")
 async def list_received_shares(current_user: UserResponse = Depends(get_current_user)):
     db = get_database()

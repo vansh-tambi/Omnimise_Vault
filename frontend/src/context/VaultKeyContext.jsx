@@ -22,17 +22,17 @@ export function VaultKeyProvider({ children }) {
   // so it gets regenerated cleanly on next vault unlock
   useEffect(() => {
     const KEY_VERSION = 'v2'; // bump this to force re-generation
-    const storedVersion = sessionStorage.getItem('rsa_key_version');
+    const storedVersion = localStorage.getItem('rsa_key_version');
     if (storedVersion !== KEY_VERSION) {
-      sessionStorage.removeItem('rsa_private_key');
-      sessionStorage.setItem('rsa_key_version', KEY_VERSION);
+      localStorage.removeItem('rsa_private_key');
+      localStorage.setItem('rsa_key_version', KEY_VERSION);
     }
   }, []);
 
   const clearKey = () => {
     setVaultKey(null);
+    // Don't remove RSA private key, otherwise all shares break after 5 mins inactivity!
     setRsaPrivateKey(null);
-    sessionStorage.removeItem('rsa_private_key');
   };
 
   const resetInactivityTimer = () => {
@@ -103,7 +103,7 @@ export function VaultKeyProvider({ children }) {
     // 3. Manage RSA Key Pair (fire-and-forget, don't block unlock on failure)
     try {
       let privateKeyObj;
-      const storedPrivKeyB64 = sessionStorage.getItem('rsa_private_key');
+      const storedPrivKeyB64 = localStorage.getItem('rsa_private_key');
       
       if (!storedPrivKeyB64) {
         // Generate new pair
@@ -111,7 +111,7 @@ export function VaultKeyProvider({ children }) {
         const pubB64 = await exportPublicKeyAsBase64(keyPair.publicKey);
         const privB64 = await exportPrivateKeyAsBase64(keyPair.privateKey);
         
-        sessionStorage.setItem('rsa_private_key', privB64);
+        localStorage.setItem('rsa_private_key', privB64);
         privateKeyObj = keyPair.privateKey;
         
         // Register public key on backend using the stored JWT token
