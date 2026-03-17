@@ -212,3 +212,406 @@ The foundation of the platform's security is its integration of various modern c
 | **File Integrity** | SHA-256 hash computed pre-encryption, verified post-decryption in browser |
 | **Backup** | Nightly encrypted ZIP to Google Drive |
 
+---
+
+## Token Lifecycle (JWT)
+
+### Token Creation (Login)
+
+When a user logs in via Google OAuth:
+
+1. **Frontend** → Sends Google ID token to `POST /auth/google`
+2. **Backend** verifies token with Google, extracts: `google_id`, `email`, `name`, `picture`
+3. **User Lookup**: Database checks if `google_id` exists
+   - **New user**: Creates user record with `rsa_public_key` from frontend
+   - **Existing user**: Updates `rsa_public_key` if user logged in from new device
+4. **JWT Generation**: `create_access_token({sub: user_id, exp: now + 7 days})`
+   - Signed with `SECRET_KEY` using `HS256` algorithm
+   - Payload contains only `sub` (MongoDB user ID) and `exp` (expiration timestamp)
+5. **Response**: `{ access_token: "<jwt>", token_type: "bearer" }`
+6. **Frontend stores**: `localStorage.setItem('token', access_token)`
+
+**Token contents (decoded JWT):**
+```json
+{
+  "sub": "<mongodb_user_id>",
+  "exp": 1747603200
+}
+```
+
+### Token Validation (Per Request)
+
+Every request to a protected endpoint includes `Authorization: Bearer <token>`:
+
+1. **Request Interceptor** (`frontend/src/services/api.js`): Reads token from `localStorage`, adds to headers
+2. **Backend Route Handler**: `@Depends(get_current_user)`
+   - Extracts token from `Authorization` header
+   - Calls `verify_token(token)` → `jwt.decode(token, SECRET_KEY, algorithms=["HS256"])`
+   - **If valid**: Returns decoded payload with `sub` (user_id)
+   - **If invalid/expired**: Returns `None` → raises `HTTPException(401)`
+3. **User Lookup**: Queries `db.users.find_one({_id: ObjectId(user_id)})`
+   - **Not found**: Returns `HTTPException(404)`
+   - **Found**: Converts to `UserResponse` and passes to route handler
+4. **Route executes** with authenticated user context
+
+### Token Expiry & Invalidation
+
+- **Expiration time**: 7 days (`ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7`)
+- **Refresh mechanism**: None — user must log in again after 7 days
+- **Auto-logout on 401**: Response interceptor (`frontend/src/services/api.js`) detects `401` status
+  - Clears `localStorage` token
+  - Clears `VaultKeyContext` (in-memory AES key)
+  - Redirects to `/login`
+- **Manual logout**: Clears `localStorage`, `VaultKeyContext`, and redirects
+
+---
+
+## Document Upload Flow
+
+### Step 1: File Encryption (Browser)
+
+```javascript
+// User selects file → encryptFile(fileBuffer, aesKey)
+const iv = crypto.getRandomValues(new Uint8Array(12));  // 96-bit random IV
+const encrypted = await crypto.subtle.encrypt(
+  { name: "AES-GCM", iv },
+  aesKey,
+  fileBuffer
+);
+// Prepend IV to ciphertext
+const encrypted_blob = combine(iv, encrypted);  // 12 bytes IV + ciphertext
+```
+
+**Result**: Encrypted binary blob, ready to upload.
+
+### Step 2: Upload Request
+
+```javascript
+const formData = new FormData();
+formData.append('vault_id', vaultId);
+formData.append('file', new Blob([encrypted_blob], { type: 'application/octet-stream' }));
+formData.append('file_hash', sha256(original_plaintext));
+formData.append('self_destruct_after_views', views || null);
+formData.append('self_destruct_at', datetime || null);
+
+api.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+```
+
+### Step 3: Backend Processing
+
+**Route Handler**: `POST /documents/upload`
+
+1. **Authentication**: `get_current_user` validates JWT
+2. **Authorization**: `check_vault_access(vault_id, user_id)` → must own vault, else `403 Forbidden`
+3. **File Validation**:
+   - Extension whitelist: `{pdf, docx, doc, png, jpg, jpeg, zip, txt}`
+   - Rejects unknown types → `400 Bad Request`
+4. **Storage**:
+   - **If `GCS_ENABLED=true`**:
+     - Generates unique path: `{user_id}/{uuid}-{filename}.enc`
+     - Uploads to Google Cloud Storage bucket
+   - **If `GCS_ENABLED=false`**:
+     - Saves to local disk: `backend/local_storage/{user_id}/{uuid}-{filename}.enc`
+5. **Metadata Recording**: Inserts into MongoDB `documents` collection:
+   ```json
+   {
+     "_id": ObjectId,
+     "filename": "document.pdf",
+     "vault_id": "<vault_id>",
+     "owner_id": "<user_id>",
+     "content_type": "application/pdf",
+     "size_bytes": 1024000,
+     "storage_url": "user_id/uuid-document.pdf.enc",
+     "file_hash": "sha256_hash",
+     "self_destruct_after_views": null,
+     "self_destruct_at": null,
+     "view_count": 0,
+     "created_at": timestamp
+   }
+   ```
+6. **Audit Log**: Inserts into `audit_logs` collection
+   ```json
+   {
+     "user_id": "<user_id>",
+     "action": "file_uploaded",
+     "document_id": "<doc_id>",
+     "ip_address": "192.168.1.1",
+     "timestamp": timestamp
+   }
+   ```
+7. **Response**: Returns `DocumentResponse` with document metadata
+
+**Crucially**: Backend never decrypts, never sees plaintext. Stores only encrypted blob path and metadata.
+
+---
+
+## Document Download & View Flow
+
+### Step 1: Get Document Info
+
+```
+GET /documents/{document_id}
+Authorization: Bearer <token>
+```
+
+### Step 2: Backend Authorization & Checks
+
+1. **Fetch Document**: `db.documents.find_one({_id: ObjectId(document_id)})`
+2. **Access Control**: Check if user is authorized:
+   - **Owner**: `db.vaults.find_one({_id: vault_id, user_id: current_user.id})`
+   - **Shared**: `db.access.find_one({shared_with: current_user.id, document_id})`
+     - Verify `access.expires_at` not in past
+   - Neither → `403 Forbidden`
+3. **Self-Destruct Enforcement**:
+   - Check `self_destruct_at < now` → hard delete → `410 Gone`
+   - Check `view_count >= self_destruct_after_views` → hard delete → `410 Gone`
+4. **Atomic View Counter Increment**: `db.documents.update_one({$inc: {view_count: 1}})`
+5. **Re-validate View Limit**: Check updated view count again
+6. **Generate Access URL**:
+   - **GCS**: V4 signed URL with 15-minute expiry
+   - **Local**: `http://localhost:8000/local-files/{storage_url}`
+   - **Google Drive**: Proxy endpoint `/documents/{id}/download`
+7. **Audit Log**: Insert download action
+8. **Response**:
+   ```json
+   {
+     "id": "<document_id>",
+     "filename": "document.pdf",
+     "content_type": "application/pdf",
+     "size_bytes": 1024000,
+     "storage_url": "<signed_url_or_proxy_path>"
+   }
+   ```
+
+### Step 3: Browser Downloads Encrypted Blob
+
+```javascript
+const response = await fetch(storage_url);  // Uses signed URL (expires in 15 min)
+const encrypted_blob = await response.arrayBuffer();
+```
+
+### Step 4: Browser Decrypts Locally
+
+```javascript
+const decrypted = await decryptFile(encrypted_blob, aesKey);
+// Extracts first 12 bytes as IV
+// AES-GCM decrypts rest using IV + aesKey
+// Verifies file_hash matches plaintext
+// Surfaces plaintext to user (download or display)
+```
+
+---
+
+## Document Sharing Flow (RSA Key Wrapping)
+
+### Step 1: Prepare Recipient's Public Key
+
+**Sender's Browser**:
+
+```javascript
+const response = await api.get('/access/lookup_user?query=recipient@email.com');
+// Response: { user_id: "<id>", email: "...", rsa_public_key: "<base64>" }
+
+const recipientPublicKey = await importPublicKeyFromBase64(response.data.rsa_public_key);
+// Converts base64 SPKI to Web Crypto CryptoKey
+```
+
+### Step 2: Wrap Vault Key with RSA-OAEP
+
+```javascript
+const wrapped_aes_key_base64 = await wrapVaultKey(
+  aesVaultKey,           // Sender's AES-256 vault key (in memory)
+  recipientPublicKey     // Recipient's RSA-2048 public key
+);
+
+// wrapVaultKey implementation:
+// crypto.subtle.wrapKey(
+//   "raw",
+//   aesVaultKey,
+//   recipientPublicKey,
+//   { name: "RSA-OAEP" }  // ← Uses recipient's public key
+// ) → base64 wrapped blob
+```
+
+**Result**: AES key encrypted **specifically for the recipient's RSA public key**. Only the recipient (with their private key) can decrypt it.
+
+### Step 3: Create Share Record
+
+```javascript
+api.post('/access/share', {
+  document_id: "<doc_id>",
+  shared_with: "<recipient_user_id>",
+  wrapped_vault_key: "<base64_wrapped_aes_key>",
+  expires_at: optional_datetime
+});
+```
+
+### Step 4: Backend Records Share
+
+1. **Authorization**: Verify sender owns the document's vault
+2. **Insert Access Record** into `db.access`:
+   ```json
+   {
+     "_id": ObjectId,
+     "document_id": "<doc_id>",
+     "owner_id": "<sender_user_id>",
+     "shared_with": "<recipient_user_id>",
+     "wrapped_vault_key": "<base64_wrapped_aes_key>",
+     "expires_at": optional_datetime,
+     "granted_at": timestamp
+   }
+   ```
+3. **Audit Log**: Log "file_shared" action
+4. **Response**: Confirm share successful
+
+### Step 5: Recipient Accesses Document
+
+1. **Fetch**: `GET /documents/{document_id}`
+   - Backend finds `access` record for this user
+   - Returns signed URL + document metadata
+2. **Get Wrapped Key** from `db.access.find_one({shared_with: user_id, document_id})`
+   - Extract `wrapped_vault_key` → base64 string
+3. **Unwrap AES Key** (Recipient's Browser):
+   ```javascript
+   const unwrapped_aes_key = await unwrapVaultKey(
+     wrapped_vault_key_base64,
+     recipientPrivateKey  // Recipient's private RSA key (from localStorage)
+   );
+   
+   // unwrapVaultKey implementation:
+   // crypto.subtle.unwrapKey(
+   //   "raw",
+   //   wrapped_blob,
+   //   recipientPrivateKey,  // ← Only recipient has this
+   //   { name: "RSA-OAEP" },
+   //   { name: "AES-GCM", length: 256 },
+   //   true,
+   //   ["encrypt", "decrypt"]
+   // ) → AES CryptoKey
+   ```
+4. **Decrypt Document**: Use recovered AES key to decrypt the blob (same as normal download)
+
+---
+
+## RSA Key Pair Generation & Storage
+
+### Key Pair Creation (First Login)
+
+**When logging in for the first time**, `frontend/src/pages/Login.jsx`:
+
+```javascript
+const keyPair = await generateRSAKeyPair();
+// crypto.subtle.generateKey(
+//   {
+//     name: "RSA-OAEP",
+//     modulusLength: 2048,
+//     publicExponent: new Uint8Array([1, 0, 1]),
+//     hash: "SHA-256"
+//   },
+//   true,
+//   ["wrapKey", "unwrapKey"]
+// )
+
+const publicKeyBase64 = await exportPublicKeyAsBase64(keyPair.publicKey);   // SPKI format
+const privateKeyBase64 = await exportPrivateKeyAsBase64(keyPair.privateKey); // PKCS8 format
+
+localStorage.setItem('rsa_public_key', publicKeyBase64);
+localStorage.setItem('rsa_private_key', privateKeyBase64);
+
+// Send public key to backend during login
+await login(oauthPayload, publicKeyBase64);  // POST /auth/google
+```
+
+### Key Storage
+
+| Key | Storage Location | Lifetime | Purpose |
+| :--- | :--- | :--- | :--- |
+| **RSA Public Key** | MongoDB (user record) + localStorage | Permanent | Allows others to wrap keys for sharing documents with you |
+| **RSA Private Key** | localStorage only | Session lifetime | Decrypt wrapped keys (unwrap) when receiving shared documents |
+| **AES Vault Key** | Memory (React VaultKeyContext) | Until vault lock/logout | Encrypt/decrypt your own documents |
+
+### Updating Public Key on New Device
+
+If user logs in from a new device:
+
+1. New browser generates fresh RSA key pair
+2. Posts new public key to backend: `POST /auth/register-public-key`
+3. Backend updates user record: `db.users.update_one({$set: {rsa_public_key: new_key}})`
+4. Previous device's shares still work (encrypted for old public key)
+5. New shares from others use the new public key
+
+---
+
+## Complete Request Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User as User Browser
+    participant API as FastAPI Backend
+    participant DB as MongoDB
+    participant Storage as GCS / Local Storage
+
+    Note over User,Storage: === LOGIN & VAULT UNLOCK ===
+    User->>API: POST /auth/google {credential, public_key}
+    API->>DB: Find user by google_id
+    alt User exists
+        API->>DB: Update rsa_public_key if changed
+    else New user
+        API->>DB: Insert new user with rsa_public_key
+    end
+    API->>User: {access_token (JWT), token_type}
+    User->>User: localStorage.setItem('token')
+    User->>User: generateRSAKeyPair() & store in localStorage
+
+    Note over User: PBKDF2(pin, vaultId) → AES key (memory only)
+
+    User->>API: POST /vault/{id}/unlock {pin_encrypted}
+    API->>DB: Validate vault exists & user owns it
+    API->>User: {unlocked: true}
+
+    Note over User,Storage: === UPLOAD DOCUMENT ===
+    User->>User: encryptFile(plaintext, aesKey) → encrypted_blob
+    User->>API: POST /documents/upload {vault_id, file, file_hash, ...}
+    API->>API: Verify JWT token
+    API->>DB: Check vault ownership
+    API->>DB: Validate file extension
+    API->>Storage: Upload encrypted_blob
+    Storage->>Storage: Store at path {user_id}/{uuid}-{filename}.enc
+    API->>DB: Insert document metadata {filename, storage_url, ...}
+    API->>DB: Insert audit_log {action: 'file_uploaded', ...}
+    API->>User: DocumentResponse {id, filename, ...}
+
+    Note over User,Storage: === DOWNLOAD DOCUMENT ===
+    User->>API: GET /documents/{id}
+    API->>API: Verify JWT token
+    API->>DB: Find document
+    API->>DB: Check ownership OR access record
+    API->>DB: Enforce self-destruct rules
+    API->>DB: Increment view_count atomically
+    API->>Storage: Generate signed URL (15 min expiry)
+    API->>DB: Insert audit_log {action: 'file_downloaded', ...}
+    API->>User: {storage_url (signed), ...}
+    User->>Storage: fetch(signed_url) → encrypted_blob
+    User->>User: decryptFile(encrypted_blob, aesKey) → plaintext
+
+    Note over User,Storage: === SHARE DOCUMENT (RSA) ===
+    User->>API: GET /access/lookup_user?query=recipient@email
+    API->>DB: Find recipient user
+    API->>User: {user_id, rsa_public_key}
+    User->>User: importPublicKeyFromBase64(rsa_public_key)
+    User->>User: wrapped_key = wrapVaultKey(aesKey, recipientPublicKey)
+    User->>API: POST /access/share {document_id, shared_with, wrapped_vault_key}
+    API->>DB: Insert access record {document_id, owner_id, shared_with, wrapped_vault_key}
+    API->>DB: Insert audit_log {action: 'file_shared', ...}
+    API->>User: AccessResponse
+
+    Note over User,Storage: === RECIPIENT ACCESSES SHARED DOC ===
+    User->>API: GET /documents/{id}
+    API->>DB: Find document & access record
+    API->>User: {storage_url, ...}
+    User->>Storage: fetch(signed_url) → encrypted_blob
+    User->>DB: Fetch wrapped_vault_key from access record
+    User->>User: aesKey = unwrapVaultKey(wrapped_vault_key, recipientPrivateKey)
+    User->>User: decryptFile(encrypted_blob, aesKey) → plaintext
+```
+
