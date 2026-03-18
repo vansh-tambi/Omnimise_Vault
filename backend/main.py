@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from database.mongodb import connect_to_mongo, close_mongo_connection
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
+import re
 from routes import auth, vault, documents, requests, access, messages, audit, notifications
 from integrations import digilocker
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -65,10 +66,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Secure Document Vault", lifespan=lifespan)
 
+PRODUCTION = os.getenv("PRODUCTION", "false").lower() == "true"
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     # Collapse multiple slashes (e.g., //vault -> /vault)
-    import re
     path = request.url.path
     collapsed_path = re.sub(r'/+', '/', path)
     
@@ -81,20 +83,41 @@ async def log_requests(request: Request, call_next):
     
     print(f"Incoming request: {request.method} {path}")
     response = await call_next(request)
+
+    # In production, enforce cross-origin cookie flags for all cookies.
+    # Vercel (frontend) <-> backend on different domain requires SameSite=None; Secure.
+    if PRODUCTION:
+        updated_raw_headers = []
+        for key, value in response.raw_headers:
+            if key.lower() == b"set-cookie":
+                cookie = value.decode("latin-1")
+                cookie = re.sub(r";\s*secure", "", cookie, flags=re.IGNORECASE)
+                cookie = re.sub(r";\s*samesite\s*=\s*[^;]+", "", cookie, flags=re.IGNORECASE)
+                cookie = f"{cookie}; Secure; SameSite=None"
+                updated_raw_headers.append((key, cookie.encode("latin-1")))
+            else:
+                updated_raw_headers.append((key, value))
+        response.raw_headers = updated_raw_headers
+
     print(f"Response status: {response.status_code}")
     return response
 
-_frontend_env = os.getenv("FRONTEND_URL", "http://localhost:5173")
-_frontend_urls = [url.strip() for url in _frontend_env.split(",") if url.strip()]
-_default_frontend_urls = [
-    "http://localhost:5173",
-    "http://localhost:5174",
+origins = [
+    url.strip()
+    for url in os.getenv(
+        "FRONTEND_URL",
+        "http://localhost:5173"
+    ).split(",")
+    if url.strip()
 ]
-_allowed_origins = list(dict.fromkeys(_frontend_urls + _default_frontend_urls))
+
+for default_origin in ["http://localhost:5173", "http://localhost:5174"]:
+    if default_origin not in origins:
+        origins.append(default_origin)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
