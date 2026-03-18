@@ -17,7 +17,7 @@ function ProtectedRoute({ children }) {
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+      <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -34,9 +34,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <VaultKeyProvider>
-        <div className="min-h-screen bg-dark-bg text-dark-text flex flex-col font-sans">
+        <div style={{ minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-sans)' }}>
           <Navbar />
-          <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8">
+          <main style={{ flex: 1, width: '100%', maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

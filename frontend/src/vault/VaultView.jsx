@@ -85,9 +85,13 @@ export default function VaultView({ vaultId }) {
       // ... existing decryption logic ...
       const res = await api.get(`documents/${doc.id}`);
       const storageUrl = res.data.storage_url;
+      const isAuthenticatedProxyUrl =
+        storageUrl.startsWith('/') ||
+        storageUrl.includes('/local-files/') ||
+        storageUrl.includes('/documents/');
       
       let encryptedBuffer;
-      if (storageUrl.startsWith('http://localhost') || storageUrl.startsWith('/')) {
+      if (isAuthenticatedProxyUrl) {
         const fileRes = await api.get(storageUrl, { responseType: 'arraybuffer' });
         encryptedBuffer = fileRes.data;
       } else {

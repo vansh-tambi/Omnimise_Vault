@@ -5,13 +5,13 @@ import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
 const navStyle = {
-  height: '52px',
+  height: '56px',
   background: 'var(--bg-base)',
   borderBottom: '1px solid var(--border-subtle)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '0 24px',
+  padding: '0 20px',
   position: 'sticky',
   top: 0,
   zIndex: 100,
@@ -30,12 +30,17 @@ const logoStyle = {
 };
 
 const navLinkStyle = (active) => ({
-  fontSize: '13px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '30px',
+  height: '30px',
   color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
   textDecoration: 'none',
-  padding: '4px 0',
-  borderBottom: active ? '1px solid var(--accent)' : '1px solid transparent',
-  transition: 'color 0.15s, border-color 0.15s',
+  borderRadius: 'var(--radius-sm)',
+  border: active ? '1px solid var(--border-strong)' : '1px solid transparent',
+  background: active ? 'var(--bg-elevated)' : 'transparent',
+  transition: 'color 0.15s, border-color 0.15s, background 0.15s',
 });
 
 const iconButtonStyle = {
@@ -53,6 +58,9 @@ const iconButtonStyle = {
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  if (location.pathname === '/login') {
+    return null;
+  }
   const hasSession = !!localStorage.getItem('token');
   const displayName = user?.name || 'Account';
   const displayPicture = user?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
@@ -140,7 +148,7 @@ export default function Navbar() {
       </Link>
 
       {hasSession && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Link to="/access" style={navLinkStyle(isAccess)} title="Shared Documents">
             <span style={iconButtonStyle}>
               <Share2 className="w-4 h-4" />
@@ -204,7 +212,7 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)', margin: '0 4px' }} />
+          <div style={{ width: '1px', height: '22px', background: 'var(--border-subtle)', margin: '0 6px' }} />
 
           <Link to="/profile" title="Profile" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
             <img
@@ -212,7 +220,7 @@ export default function Navbar() {
               alt={displayName}
               style={{ width: '24px', height: '24px', borderRadius: '999px', border: '1px solid var(--border-default)' }}
             />
-            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{displayName}</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: 1 }}>{displayName}</span>
           </Link>
 
           <button

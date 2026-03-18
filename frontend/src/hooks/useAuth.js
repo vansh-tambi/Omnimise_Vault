@@ -37,6 +37,8 @@ export function useAuth() {
     localStorage.setItem('token', response.data.access_token);
     const userResponse = await api.get('/auth/me');
     setUser(userResponse.data);
+    // useAuth is currently hook-local state, so force app-wide re-init after login.
+    window.location.href = '/';
   };
 
   const logout = () => {

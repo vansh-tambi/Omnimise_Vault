@@ -25,11 +25,12 @@ class PublicKeyRegisterPayload(BaseModel):
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+BACKEND_URL = (os.getenv("BACKEND_URL") or os.getenv("API_URL") or "").rstrip("/")
 DRIVE_REDIRECT_URI = os.getenv(
     "GOOGLE_DRIVE_REDIRECT_URI",
-    "http://localhost:8000/auth/google/drive/callback"
+    f"{BACKEND_URL}/auth/google/drive/callback" if BACKEND_URL else ""
 )
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = (os.getenv("FRONTEND_URL", "").split(",")[0]).strip()
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserResponse:
     payload = verify_token(token)

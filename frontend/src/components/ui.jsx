@@ -6,6 +6,7 @@ export const Card = ({ children, style = {}, onClick }) => (
       border: '1px solid var(--border-subtle)',
       borderRadius: 'var(--radius-lg)',
       padding: '20px',
+      boxShadow: 'var(--shadow-sm)',
       transition: 'border-color 0.15s, background 0.15s',
       cursor: onClick ? 'pointer' : 'default',
       ...style,
@@ -36,9 +37,9 @@ export const Button = ({ children, variant = 'default', onClick, disabled, style
     success: { background: 'var(--green-dim)', color: 'var(--green)', border: '1px solid rgba(68,255,136,0.2)' },
   };
   const sizes = {
-    sm: { padding: '5px 10px', fontSize: '12px', borderRadius: 'var(--radius-sm)' },
-    md: { padding: '8px 16px', fontSize: '13px', borderRadius: 'var(--radius-md)' },
-    lg: { padding: '11px 22px', fontSize: '14px', borderRadius: 'var(--radius-md)' },
+    sm: { padding: '6px 10px', fontSize: '12px', borderRadius: 'var(--radius-sm)', minHeight: '30px' },
+    md: { padding: '8px 14px', fontSize: '13px', borderRadius: 'var(--radius-md)', minHeight: '34px' },
+    lg: { padding: '10px 20px', fontSize: '14px', borderRadius: 'var(--radius-md)', minHeight: '40px' },
   };
   return (
     <button
@@ -51,11 +52,15 @@ export const Button = ({ children, variant = 'default', onClick, disabled, style
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.4 : 1,
         fontFamily: 'var(--font-sans)',
+        fontWeight: variant === 'primary' ? 600 : 500,
         transition: 'opacity 0.15s, background 0.15s',
         outline: 'none',
         display: 'inline-flex',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: '6px',
+        lineHeight: 1.2,
+        verticalAlign: 'middle',
         whiteSpace: 'nowrap',
         ...style,
       }}
@@ -82,6 +87,7 @@ export const Badge = ({ children, variant = 'default' }) => {
         borderRadius: '4px',
         fontSize: '11px',
         fontFamily: 'var(--font-mono)',
+        lineHeight: 1.4,
         fontWeight: '500',
         letterSpacing: '0.03em',
         display: 'inline-flex',
@@ -107,6 +113,7 @@ export const Input = ({ placeholder, value, onChange, type = 'text', style = {},
       borderRadius: 'var(--radius-md)',
       padding: '9px 12px',
       fontSize: '13px',
+      lineHeight: 1.35,
       color: 'var(--text-primary)',
       fontFamily: 'var(--font-sans)',
       outline: 'none',

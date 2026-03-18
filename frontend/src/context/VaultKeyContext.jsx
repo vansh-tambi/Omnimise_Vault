@@ -21,9 +21,11 @@ export function VaultKeyProvider({ children }) {
   // One-time migration: clear any RSA key stored with the old broken export format
   // so it gets regenerated cleanly on next vault unlock
   useEffect(() => {
-    const KEY_VERSION = 'v2'; // bump this to force re-generation
+    const KEY_VERSION = 'v3'; // bump this to force re-generation
     const storedVersion = localStorage.getItem('rsa_key_version');
     if (storedVersion !== KEY_VERSION) {
+      // Keep the RSA keypair in sync; partial deletion causes unwrap failures later.
+      localStorage.removeItem('rsa_public_key');
       localStorage.removeItem('rsa_private_key');
       localStorage.setItem('rsa_key_version', KEY_VERSION);
     }
@@ -111,20 +113,12 @@ export function VaultKeyProvider({ children }) {
         const pubB64 = await exportPublicKeyAsBase64(keyPair.publicKey);
         const privB64 = await exportPrivateKeyAsBase64(keyPair.privateKey);
         
+        localStorage.setItem('rsa_public_key', pubB64);
         localStorage.setItem('rsa_private_key', privB64);
         privateKeyObj = keyPair.privateKey;
         
-        // Register public key on backend using the stored JWT token
-        const token = localStorage.getItem('token');
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        await fetch(`${apiBase}/auth/register-public-key`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ public_key: pubB64 })
-        });
+        // Register public key using the shared API client (env baseURL + auth interceptor)
+        await api.post('/auth/register-public-key', { public_key: pubB64 });
       } else {
         // Import existing key from session
         privateKeyObj = await importPrivateKeyFromBase64(storedPrivKeyB64);

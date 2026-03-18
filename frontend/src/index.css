@@ -57,6 +57,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg-base); }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
@@ -69,6 +80,8 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary {
@@ -76,8 +89,13 @@ body {
   color: #0a0a0a;
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
-  padding: 8px 16px;
+  padding: 8px 14px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.2;
 }
 
 .btn-secondary {
@@ -85,7 +103,12 @@ body {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: 8px 16px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.2;
 }
 
 .input-field {

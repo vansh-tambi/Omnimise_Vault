@@ -3,9 +3,9 @@ import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 
-MONGODB_URL = os.getenv("MONGO_URI") or os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+MONGODB_URL = os.getenv("MONGO_URI") or os.getenv("MONGODB_URL", "")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "document_vault")
-LOCAL_FALLBACK_URL = "mongodb://localhost:27017"
+LOCAL_FALLBACK_URL = os.getenv("MONGO_LOCAL_FALLBACK_URL", "")
 MONGO_TLS_DISABLE_OCSP = os.getenv("MONGO_TLS_DISABLE_OCSP", "true").lower() == "true"
 MONGO_TLS_INSECURE = os.getenv("MONGO_TLS_INSECURE", "false").lower() == "true"
 MONGO_TLS_ENABLED = os.getenv("MONGO_TLS_ENABLED")
@@ -58,7 +58,7 @@ async def connect_to_mongo():
         print(f"Primary MongoDB connection failed: {exc}")
 
     if db_config.client is None or primary_error is not None:
-        if MONGODB_URL != LOCAL_FALLBACK_URL:
+        if LOCAL_FALLBACK_URL and MONGODB_URL != LOCAL_FALLBACK_URL:
             try:
                 db_config.client = _build_client(LOCAL_FALLBACK_URL)
                 await db_config.client.admin.command("ping")

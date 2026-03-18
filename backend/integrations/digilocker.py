@@ -11,7 +11,11 @@ router = APIRouter(prefix="/digilocker", tags=["digilocker"])
 
 DIGILOCKER_CLIENT_ID = os.getenv("DIGILOCKER_CLIENT_ID", "mock_client")
 DIGILOCKER_CLIENT_SECRET = os.getenv("DIGILOCKER_CLIENT_SECRET", "mock_secret")
-DIGILOCKER_REDIRECT_URI = os.getenv("DIGILOCKER_REDIRECT_URI", "http://localhost:8000/digilocker/callback")
+BACKEND_URL = (os.getenv("BACKEND_URL") or os.getenv("API_URL") or "").rstrip("/")
+DIGILOCKER_REDIRECT_URI = os.getenv(
+    "DIGILOCKER_REDIRECT_URI",
+    f"{BACKEND_URL}/digilocker/callback" if BACKEND_URL else ""
+)
 
 # API Base
 AUTH_URL = "https://api.digitallocker.gov.in/public/oauth2/1/authorize"
@@ -69,7 +73,7 @@ async def digilocker_callback(code: str, state: str):
                 {"$set": {"digilocker_token": access_token}}
             )
             
-    frontend_base = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    frontend_base = (os.getenv("FRONTEND_URL", "").split(",")[0]).strip()
     return RedirectResponse(url=f"{frontend_base}/dashboard?digilocker=connected")
 
 @router.get("/documents")

@@ -106,14 +106,10 @@ origins = [
     url.strip()
     for url in os.getenv(
         "FRONTEND_URL",
-        "http://localhost:5173"
+        ""
     ).split(",")
     if url.strip()
 ]
-
-for default_origin in ["http://localhost:5173", "http://localhost:5174"]:
-    if default_origin not in origins:
-        origins.append(default_origin)
 
 app.add_middleware(
     CORSMiddleware,

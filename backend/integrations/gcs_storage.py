@@ -11,6 +11,11 @@ GCS_ENABLED = os.getenv("GCS_ENABLED", "true").lower() == "true"
 # or use service account json passing
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "vault-storage")
 LOCAL_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "local_storage")
+BACKEND_BASE_URL = (
+    os.getenv("BACKEND_URL")
+    or os.getenv("API_URL")
+    or ""
+).rstrip("/")
 
 def get_gcs_client():
     # Will automatically use GOOGLE_APPLICATION_CREDENTIALS env var
@@ -67,7 +72,9 @@ def generate_signed_url(blob_path: str, expiry_minutes: int = 15) -> str:
         # For Drive-backed storage, documents are served through authenticated proxy routes.
         if str(blob_path).startswith("drive:"):
             return ""
-        return f"http://localhost:8000/local-files/{blob_path}"
+        if BACKEND_BASE_URL:
+            return f"{BACKEND_BASE_URL}/local-files/{blob_path}"
+        return f"/local-files/{blob_path}"
 
     client = get_gcs_client()
     bucket = client.bucket(GCS_BUCKET_NAME)

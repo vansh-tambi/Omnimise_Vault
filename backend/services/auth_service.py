@@ -5,9 +5,9 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from models.user import UserCreate, UserInDB
 
-SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-change-it-in-prod")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
+SECRET_KEY = os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY", "change-this-in-prod")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRY_HOURS", "168")) * 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

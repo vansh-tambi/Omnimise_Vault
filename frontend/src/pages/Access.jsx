@@ -63,15 +63,18 @@ export default function Access() {
       }
 
       const privateKey = await importPrivateKeyFromBase64(privateKeyBase64);
-      const { unwrapVaultKey: unwrap } = await import('../encryption/crypto');
       const aesKey = await unwrapVaultKey(wrappedKeyBase64, privateKey);
 
       // Fetch the encrypted file
       const docRes = await api.get(`/documents/${share.document_id}`);
       const storageUrl = docRes.data.storage_url;
+      const isAuthenticatedProxyUrl =
+        storageUrl.startsWith('/') ||
+        storageUrl.includes('/local-files/') ||
+        storageUrl.includes('/documents/');
 
       let encryptedBuffer;
-      if (storageUrl.startsWith('http://localhost') || storageUrl.startsWith('/')) {
+      if (isAuthenticatedProxyUrl) {
         const fileRes = await api.get(storageUrl, { responseType: 'arraybuffer' });
         encryptedBuffer = fileRes.data;
       } else {
@@ -94,6 +97,13 @@ export default function Access() {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
       console.error(err);
+      if (err?.name === 'OperationError') {
+        alert(
+          'Failed to open shared document because your RSA key pair is out of sync. ' +
+          'Log out and log back in, then ask the sender to share the file again.'
+        );
+        return;
+      }
       alert('Failed to open document: ' + (err.message || 'Unknown error'));
     }
   };
