@@ -15,8 +15,7 @@ The system utilizes a decoupled frontend and backend architecture linked via a s
 3. **Database (MongoDB)**: Stores relationships, access permissions, temporal session metadata, and pointers to the storage blobs. It retains the user's base64-encoded encrypted RSA public keys for document sharing scenarios but is blinded to the actual file contents.
 4. **Cloud Storage (Google Cloud Storage)**: Acts as the encrypted, highly durable data lake housing the raw ciphertexts (when `GCS_ENABLED=true`).
 5. **Local Storage Fallback**: A local `backend/local_storage` directory that acts as a secure container for encrypted documents during local development or when cloud billing is inactive (when `GCS_ENABLED=false`).
-6. **DigiLocker Integration (India)**: Proxies raw government documents into the frontend where they are wrapped with the zero-knowledge AES key before touching our cloud storage.
-7. **Background Tasks (Google Drive)**: An embedded APScheduler cron service runs daily at midnight to execute completely automated ZIP backups of users' encrypted vaults into their connected Google Drive accounts. We also added a manual trigger mechanism in the dashboard.
+6. **Background Tasks (Future Integrations)**: An embedded APScheduler cron service is set up to support automated encrypted ZIP backup workflows through planned future third-party integrations.
 
 ### System Flow
 ```text
@@ -42,7 +41,7 @@ MongoDB            Google Cloud Storage
  audit logs)
      |
      v
-Google Drive (nightly encrypted ZIP backup)
+Future Integration (planned encrypted ZIP backup)
 ```
 
 ```mermaid
@@ -57,7 +56,7 @@ flowchart TD
     
     DB -. "Nightly Meta Sync" .-> Cron["APScheduler Backup Cron"]
     Storage -. "Nightly Blob Sync" .-> Cron
-    Cron -- "5. Zips encrypted blobs into user folder" --> GD["Google Drive"]
+   Cron -- "5. Zips encrypted blobs for external backup" --> FI["Future Integration"]
     
     classDef secure fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff;
     classDef server fill:#1e293b,stroke:#64748b,stroke-width:1px,color:#cbd5e1;
@@ -65,7 +64,7 @@ flowchart TD
     
     class Browser,PBKDF2,Encrypt secure;
     class API,DB,Storage,Cron server;
-    class GD external;
+   class FI external;
 ```
 
 ## Technology Stack
@@ -77,7 +76,7 @@ flowchart TD
 | **Database** | MongoDB (Motor Driver) | NoSQL document store for metadata and access schemas. |
 | **Cloud Storage** | Google Cloud Storage | Highly durable object storage backend for encrypted blobs. |
 | **Local Storage** | Python OS/Pathlib | Fallback local file system driver for development environments. |
-| **Background Tasks** | APScheduler | Embedding async cron scheduler for Google Drive syncs. |
+| **Background Tasks** | APScheduler | Embedding async cron scheduler for planned future backup integrations. |
 | **Authentication** | Google OAuth, Python-Jose | Identity federation merged with strict session JWT issuance. |
 
 ## Local Development Setup
@@ -87,7 +86,6 @@ flowchart TD
 *   Python (3.9+)
 *   MongoDB running locally on default port 27017
 *   Google Cloud Platform project with OAuth credentials and a GCS Bucket
-*   DigiLocker API credentials (if testing government integrations)
 
 ### Backend Setup
 1. Navigate to the `backend` directory.
@@ -117,9 +115,6 @@ flowchart TD
 *   `GCS_BUCKET_NAME`: Target Google Cloud Storage bucket name.
 *   `GCS_SERVICE_ACCOUNT_JSON`: Path to the GCP Service Account credentials JSON file.
 *   `FRONTEND_URL`: URL of the React application for rigorous CORS enforcement.
-*   `DIGILOCKER_CLIENT_ID`: API Client ID for DigiLocker OAuth.
-*   `DIGILOCKER_CLIENT_SECRET`: API Secret for DigiLocker OAuth.
-*   `DIGILOCKER_REDIRECT_URI`: Server callback URL for DigiLocker code exchange.
 
 **Frontend (`frontend/.env`)**
 *   `VITE_API_URL`: Root URL of the FastAPI backend (default: `http://localhost:8000`).
@@ -169,9 +164,7 @@ flowchart TD
 ### Integrations
 | Method | Path | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| POST | `/backup/trigger` | Yes | Manually forces an in-memory ZIP aggregation and Google Drive backup of entire vault asynchronously. |
-| GET | `/digilocker/auth` | Yes | Initiates the DigiLocker OAuth integration pipeline. |
-| GET | `/digilocker/import/{uri}` | Yes | Streams raw DigiLocker document bytes securely to the frontend for algorithmic encryption. |
+| POST | `/backup/trigger` | Yes | Manually forces an in-memory ZIP aggregation for planned future external backup integrations. |
 
 ## Security Model
 
@@ -210,7 +203,7 @@ The foundation of the platform's security is its integration of various modern c
 | **File Validation** | Extension whitelist enforced server-side |
 | **Inactivity Lock** | Auto-lock after 5 minutes, explicit memory wipe |
 | **File Integrity** | SHA-256 hash computed pre-encryption, verified post-decryption in browser |
-| **Backup** | Nightly encrypted ZIP to Google Drive |
+| **Backup** | Encrypted ZIP backup workflow reserved for future integrations |
 
 ---
 
@@ -370,7 +363,7 @@ Authorization: Bearer <token>
 6. **Generate Access URL**:
    - **GCS**: V4 signed URL with 15-minute expiry
    - **Local**: `http://localhost:8000/local-files/{storage_url}`
-   - **Google Drive**: Proxy endpoint `/documents/{id}/download`
+   - **Future Integration**: External provider proxy endpoint (planned)
 7. **Audit Log**: Insert download action
 8. **Response**:
    ```json
