@@ -4,6 +4,7 @@ import { UserCheck, Check, X, Plus, Send, Clock, Inbox, SendHorizontal } from 'l
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import ApproveShareModal from '../vault/ApproveShareModal';
+import { Badge, Button, Card, EmptyState, Input, Label, PageHeader } from '../components/ui';
 
 export default function Requests() {
   const { user } = useAuth();
@@ -116,93 +117,112 @@ export default function Requests() {
 
   const rows = activeTab === 'incoming' ? incomingRequests : outgoingRequests;
 
+  const statusVariant = (status) => {
+    if (status === 'pending') return 'amber';
+    if (status === 'approved') return 'green';
+    return 'red';
+  };
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between border-b border-gray-700 pb-4">
-        <div className="flex items-center gap-3">
-          <UserCheck className="w-6 h-6 text-gray-300" />
-          <h1 className="text-2xl font-semibold text-white">Document Requests</h1>
-        </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20"
-        >
-          <Plus className="w-4 h-4" />
-          New Request
-        </button>
-      </div>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <PageHeader
+        title="Document Requests"
+        subtitle="Approve or request secure document transfers"
+        actions={
+          <Button onClick={() => setShowForm((v) => !v)} variant="primary">
+            <Plus className="w-4 h-4" />
+            New Request
+          </Button>
+        }
+      />
 
       {showForm && (
-        <div className="card p-6 space-y-4 border border-blue-500/30">
-          <h2 className="text-lg font-medium text-white">Request a Document</h2>
+        <Card style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '15px', color: 'var(--text-primary)', marginBottom: '12px' }}>Request a document</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient Email or Account ID</label>
-            <input
+            <Label>Recipient Email or Account ID</Label>
+            <Input
               type="text"
               value={targetIdentifier}
               onChange={(e) => setTargetIdentifier(e.target.value)}
-              className="input-field w-full"
               placeholder="colleague@example.com or 67f1..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Document Type</label>
-            <input
+            <Label>Document Type</Label>
+            <Input
               type="text"
               value={docType}
               onChange={(e) => setDocType(e.target.value)}
-              className="input-field w-full"
               placeholder="Passport, Pay Slip, ID Proof"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Description (optional)</label>
+            <Label>Description (optional)</Label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="input-field w-full resize-none"
+              style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '9px 12px', color: 'var(--text-primary)', fontSize: '13px', resize: 'none' }}
               placeholder="Add context for the requester"
             />
           </div>
-          <div className="flex gap-3 justify-end">
-            <button
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 text-sm transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmitRequest}
-              disabled={submitting}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition disabled:opacity-50"
-            >
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' }}>
+            <Button onClick={() => setShowForm(false)} variant="ghost">Cancel</Button>
+            <Button onClick={handleSubmitRequest} disabled={submitting} variant="primary">
               <Send className="w-4 h-4" />
               {submitting ? 'Sending...' : 'Send Request'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-lg w-fit border border-gray-700">
+      <div style={{
+        display: 'flex',
+        gap: '2px',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        padding: '3px',
+        marginBottom: '24px',
+        width: 'fit-content',
+      }}>
         <button
           onClick={() => setActiveTab('incoming')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
-            activeTab === 'incoming'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
-          }`}
+          style={{
+            padding: '6px 14px',
+            borderRadius: 'calc(var(--radius-md) - 2px)',
+            fontSize: '12px',
+            fontFamily: 'var(--font-mono)',
+            background: activeTab === 'incoming' ? 'var(--bg-elevated)' : 'transparent',
+            color: activeTab === 'incoming' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
         >
           <Inbox className="w-4 h-4" />
           Incoming
         </button>
         <button
           onClick={() => setActiveTab('outgoing')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
-            activeTab === 'outgoing'
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
-          }`}
+          style={{
+            padding: '6px 14px',
+            borderRadius: 'calc(var(--radius-md) - 2px)',
+            fontSize: '12px',
+            fontFamily: 'var(--font-mono)',
+            background: activeTab === 'outgoing' ? 'var(--bg-elevated)' : 'transparent',
+            color: activeTab === 'outgoing' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
         >
           <SendHorizontal className="w-4 h-4" />
           Outgoing
@@ -210,82 +230,82 @@ export default function Requests() {
       </div>
 
       {loading ? (
-        <div className="text-gray-400">Loading requests...</div>
+        <div style={{ color: 'var(--text-secondary)' }}>Loading requests...</div>
       ) : rows.length === 0 ? (
-        <div className="card text-center p-12 text-gray-400 border-dashed border-2">
-          {activeTab === 'incoming' ? 'No incoming requests.' : 'No outgoing requests.'}
-        </div>
+        <Card>
+          <EmptyState
+            icon={<UserCheck className="w-8 h-8" />}
+            title={activeTab === 'incoming' ? 'No incoming requests' : 'No outgoing requests'}
+            description="Requests will appear here when a teammate asks for secure document access."
+          />
+        </Card>
       ) : (
-        <div className="space-y-3 max-w-4xl">
+        <div style={{ display: 'grid', gap: '10px' }}>
           {rows.map((req) => {
             const isIncoming = activeTab === 'incoming';
             const isPendingIncoming = isIncoming && req.status === 'pending';
             const isHighlighted = highlightedRequestId === req.id;
 
             return (
-              <div
+              <Card
                 key={req.id}
-                className={`card p-5 flex items-start justify-between gap-4 ${
-                  isHighlighted ? 'border border-blue-500/60' : ''
-                }`}
+                style={{
+                  borderColor: isHighlighted ? 'var(--border-strong)' : 'var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                }}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium">{req.document_type}</p>
+                  <p style={{ color: 'var(--text-primary)', fontSize: '14px' }}>{req.document_type}</p>
                   {req.description && (
-                    <p className="text-sm text-gray-400 mt-1">{req.description}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{req.description}</p>
                   )}
-                  <p className="text-sm text-gray-400 mt-2">
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
                     {isIncoming ? (
                       <>
-                        Requested by: <span className="text-gray-200 break-all">{req.requester_email || req.requester_id}</span>
+                        Requested by: <span style={{ color: 'var(--text-primary)' }}>{req.requester_email || req.requester_id}</span>
                       </>
                     ) : (
                       <>
-                        Sent to: <span className="text-gray-200 break-all">{req.target_user_email || req.target_user_id}</span>
+                        Sent to: <span style={{ color: 'var(--text-primary)' }}>{req.target_user_email || req.target_user_id}</span>
                       </>
                     )}
                   </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Clock className="w-3 h-3 text-gray-600" />
-                    <span className="text-xs text-gray-500">{new Date(req.created_at).toLocaleString()}</span>
-                    <span
-                      className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${
-                        req.status === 'pending'
-                          ? 'bg-yellow-500/10 text-yellow-400'
-                          : req.status === 'approved'
-                          ? 'bg-green-500/10 text-green-400'
-                          : 'bg-red-500/10 text-red-400'
-                      }`}
-                    >
-                      {req.status}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                    <Clock className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{new Date(req.created_at).toLocaleString()}</span>
+                    <Badge variant={statusVariant(req.status)}>{req.status}</Badge>
                     {req.fulfilled_vault_id && (
-                      <span className="text-xs text-gray-400">Vault: {req.fulfilled_vault_id.slice(-8)}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Vault: {req.fulfilled_vault_id.slice(-8)}</span>
                     )}
                   </div>
                 </div>
 
                 {isPendingIncoming && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Button
                       onClick={() => setApprovingRequest(req)}
                       disabled={respondingId === req.id}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 hover:bg-green-500/20 rounded-lg text-sm transition disabled:opacity-50"
+                      variant="success"
+                      size="sm"
                     >
                       <Check className="w-4 h-4" />
                       Approve
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => handleRespond(req.id, 'rejected')}
                       disabled={respondingId === req.id}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-sm transition disabled:opacity-50"
+                      variant="danger"
+                      size="sm"
                     >
                       <X className="w-4 h-4" />
                       Reject
-                    </button>
+                    </Button>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>

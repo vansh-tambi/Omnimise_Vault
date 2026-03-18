@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CloudUpload, X, Clock, Eye } from 'lucide-react';
+import { Button, Input, Label } from '../components/ui';
 
 export default function UploadModal({ onUpload, onClose }) {
   const [file, setFile] = useState(null);
@@ -30,85 +31,88 @@ export default function UploadModal({ onUpload, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-      <div className="card w-full max-w-md bg-gray-900 border-blue-500/30 p-6 rounded-xl shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition">
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 200,
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '28px',
+        width: '100%',
+        maxWidth: '440px',
+        boxShadow: 'var(--shadow-lg)',
+        position: 'relative',
+      }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: '14px', right: '14px', background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
           <X className="w-5 h-5" />
         </button>
 
-        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <CloudUpload className="w-6 h-6 text-blue-400" />
-          Secure Upload
+        <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <CloudUpload className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+          Secure upload
         </h3>
 
-        <div className="space-y-6">
-          <div className="group relative border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-blue-500/50 transition bg-gray-800/30">
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <div style={{ position: 'relative', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-md)', padding: '24px', textAlign: 'center', background: 'var(--bg-elevated)' }}>
             <input
               type="file"
               onChange={handleFileChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
             />
             {file ? (
-              <div className="text-blue-400">
-                <p className="font-medium truncate">{file.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+              <div>
+                <p style={{ color: 'var(--text-primary)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>{(file.size / 1024).toFixed(1)} KB</p>
               </div>
             ) : (
-              <div className="text-gray-500">
-                <p>Click or drag to select file</p>
-                <p className="text-xs mt-1">Max size 50MB</p>
+              <div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Click or drag to select file</p>
+                <p style={{ fontSize: '11px', marginTop: '4px', color: 'var(--text-tertiary)' }}>Max size 50MB</p>
               </div>
             )}
           </div>
 
-          <div className="space-y-4">
-            <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-              <p className="text-xs font-semibold text-gray-400 mb-4 uppercase tracking-wider">Optional Security Settings</p>
+          <div style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
+            <p style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Optional security settings</p>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-2">
-                    <Eye className="w-4 h-4 text-blue-400" />
-                    Self-destruct after N views
-                  </label>
-                  <input
-                    type="number"
-                    value={selfDestructViews}
-                    onChange={(e) => setSelfDestructViews(e.target.value)}
-                    className="input-field w-full"
-                    placeholder="e.g. 1"
-                    min="1"
-                  />
-                </div>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div>
+                <Label>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Eye className="w-3 h-3" />Self-destruct after views</span>
+                </Label>
+                <Input
+                  type="number"
+                  value={selfDestructViews}
+                  onChange={(e) => setSelfDestructViews(e.target.value)}
+                  placeholder="e.g. 1"
+                  min="1"
+                />
+              </div>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-2">
-                    <Clock className="w-4 h-4 text-blue-400" />
-                    Auto-delete after date
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={selfDestructAt}
-                    onChange={(e) => setSelfDestructAt(e.target.value)}
-                    className="input-field w-full text-gray-300"
-                  />
-                </div>
+              <div>
+                <Label>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Clock className="w-3 h-3" />Auto-delete date</span>
+                </Label>
+                <Input
+                  type="datetime-local"
+                  value={selfDestructAt}
+                  onChange={(e) => setSelfDestructAt(e.target.value)}
+                />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <button onClick={onClose} className="px-5 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition">
-            Cancel
-          </button>
-          <button
-            disabled={!file || loading}
-            onClick={handleConfirm}
-            className="px-6 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button disabled={!file || loading} variant="primary" onClick={handleConfirm}>
             {loading ? 'Processing...' : 'Encrypt & Upload'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

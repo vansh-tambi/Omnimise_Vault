@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Share2, ShieldAlert, Trash2, Eye, CloudUpload } from 'lucide-react';
 import api from '../services/api';
-import UploadButton from '../components/UploadButton';
 import { encryptFile, decryptFile, importPrivateKeyFromBase64, unwrapVaultKey, hashFile } from '../encryption/crypto';
 import { useVaultKey } from '../context/VaultKeyContext';
 import { useAuth } from '../hooks/useAuth';
@@ -9,6 +8,7 @@ import VaultPinPrompt from './VaultPinPrompt';
 import ShareDocument from '../access/ShareDocument';
 import UploadModal from './UploadModal';
 import { Link } from 'react-router-dom';
+import { Badge, Button, Card, EmptyState } from '../components/ui';
 
 export default function VaultView({ vaultId }) {
   const [documents, setDocuments] = useState([]);
@@ -163,86 +163,100 @@ export default function VaultView({ vaultId }) {
 
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="text-green-400 w-6 h-6" />
-            <span className="text-sm text-gray-300">
-               {currentKey ? "Vault Unlocked. Operations secure." : "Vault Locked. Downloads will attempt to use shared RSA wrapper."}
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <Card style={{ padding: '14px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShieldAlert className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+            {currentKey ? <Badge variant="accent">unlocked</Badge> : <Badge variant="default">locked</Badge>}
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {currentKey ? 'Vault unlocked. Operations are local and encrypted.' : 'Vault locked. Unlock to access encrypted documents.'}
             </span>
           </div>
           {currentKey && (
-            <button 
-              onClick={() => setShowUploadModal(true)}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 flex items-center gap-2"
-            >
+            <Button variant="primary" onClick={() => setShowUploadModal(true)}>
               <CloudUpload className="w-4 h-4" />
               Upload Document
-            </button>
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
       
       {!currentKey && (
-         <div className="mb-6">
+         <div style={{ marginBottom: '16px' }}>
             <VaultPinPrompt vaultId={vaultId} onKeyDerived={() => {}} />
          </div>
       )}
 
       {accessError ? (
-        <div className="card text-center p-12 border-dashed border-2 border-gray-700">
-          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-white mb-2">Vault Unavailable</h3>
-          <p className="text-gray-400 max-w-sm mx-auto">{accessError}</p>
-          <div className="mt-4">
-            <Link to="/access" className="text-blue-400 hover:text-blue-300 underline">Go to Shared with Me</Link>
-          </div>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<FileText className="w-8 h-8" />}
+            title="Vault unavailable"
+            description={accessError}
+            action={<Link to="/access" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: '12px' }}>Go to Shared with Me</Link>}
+          />
+        </Card>
       ) : !currentKey ? (
-        <div className="card text-center p-16 border-dashed border-2 border-gray-700">
-          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-white mb-2">Documents Hidden</h3>
-          <p className="text-gray-400 max-w-sm mx-auto">Enter your vault PIN above to unlock and view your documents.</p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<FileText className="w-8 h-8" />}
+            title="Documents hidden"
+            description="Enter your vault PIN above to unlock and view your documents."
+          />
+        </Card>
       ) : loading ? (
-        <div className="text-center p-12 text-gray-400">Loading your secure documents...</div>
+        <div style={{ color: 'var(--text-secondary)', padding: '18px 0' }}>Loading secure documents...</div>
       ) : documents.length === 0 ? (
-        <div className="card text-center p-16 border-dashed border-2">
-          <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-white mb-2">Vault is empty</h3>
-          <p className="text-gray-400 max-w-sm mx-auto">Upload sensitive files to keep them secure and accessible only by you.</p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={<FileText className="w-8 h-8" />}
+            title="Vault is empty"
+            description="Upload sensitive files to keep them encrypted and accessible only by authorized users."
+          />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
           {documents.map(doc => (
-            <div key={doc.id} className="card p-4 flex items-center justify-between hover:bg-gray-800 transition">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                  <FileText className="w-6 h-6" />
+            <div
+              key={doc.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border-subtle)',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div style={{ color: 'var(--text-secondary)' }}>
+                  <FileText className="w-4 h-4" />
                 </div>
-                <div className="truncate pr-4">
-                  <p className="font-medium text-gray-200 truncate">{doc.filename}</p>
-                  <p className="text-xs text-gray-500 capitalize">
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.filename}</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
                     {doc.content_type.split('/')[1] || doc.content_type} • {(doc.size_bytes / 1024).toFixed(1)} KB
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => downloadDoc(doc, false)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-green-400 transition" title="View Document">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button onClick={() => downloadDoc(doc, false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} title="View Document">
                   <Eye className="w-4 h-4" />
                 </button>
-                <button onClick={() => downloadDoc(doc, true)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-blue-400 transition" title="Decrypt & Download">
+                <button onClick={() => downloadDoc(doc, true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} title="Decrypt & Download">
                   <Download className="w-4 h-4" />
                 </button>
                 {currentKey && (
-                  <button onClick={() => setSharingDoc(doc)} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-purple-400 transition" title="Share Document">
+                  <button onClick={() => setSharingDoc(doc)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} title="Share Document">
                     <Share2 className="w-4 h-4" />
                   </button>
                 )}
                 <button 
                   onClick={() => handleDeleteDoc(doc)} 
-                  className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-red-500 transition" 
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
                   title="Delete Document"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -250,7 +264,7 @@ export default function VaultView({ vaultId }) {
               </div>
             </div>
           ))}
-        </div>
+        </Card>
       )}
       
       {sharingDoc && (
@@ -269,17 +283,26 @@ export default function VaultView({ vaultId }) {
       )}
 
       {destructModalMessage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-xl border border-red-500/40 bg-gray-900 p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-red-300">Document Unavailable</h3>
-            <p className="mt-3 text-sm text-gray-200">{destructModalMessage}</p>
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={() => setDestructModalMessage('')}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white transition hover:bg-red-500"
-              >
-                Close
-              </button>
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 200,
+        }}>
+          <div style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '28px',
+            width: '100%',
+            maxWidth: '440px',
+            boxShadow: 'var(--shadow-lg)',
+          }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--red)' }}>Document unavailable</h3>
+            <p style={{ marginTop: '10px', fontSize: '13px', color: 'var(--text-secondary)' }}>{destructModalMessage}</p>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="danger" onClick={() => setDestructModalMessage('')}>Close</Button>
             </div>
           </div>
         </div>

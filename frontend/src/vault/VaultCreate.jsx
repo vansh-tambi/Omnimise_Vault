@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useVault } from '../hooks/useVault';
 import { Plus } from 'lucide-react';
+import { Button, Card, Input, Label } from '../components/ui';
 
 export default function VaultCreate({ onCreated }) {
   const [name, setName] = useState('');
@@ -33,24 +34,33 @@ export default function VaultCreate({ onCreated }) {
 
   if (!isOpen) {
     return (
-      <button onClick={() => setIsOpen(true)} className="card flex flex-col items-center justify-center border-dashed border-2 hover:bg-gray-800 transition cursor-pointer hover:border-blue-500 text-gray-400 hover:text-white group min-h-[200px]">
-        <div className="p-4 rounded-full bg-gray-800 group-hover:bg-blue-600/20 mb-4 transition">
-          <Plus className="w-8 h-8 group-hover:text-blue-400" />
+      <Card onClick={() => setIsOpen(true)} style={{ minHeight: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed' }}>
+        <div style={{
+          width: '34px',
+          height: '34px',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--border-default)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '10px',
+          color: 'var(--text-secondary)',
+        }}>
+          <Plus className="w-4 h-4" />
         </div>
-        <span className="font-semibold text-lg">Create New Vault</span>
-      </button>
+        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>Create new vault</span>
+      </Card>
     );
   }
 
   return (
-    <div className="card border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
-      <h3 className="text-xl font-semibold mb-4 text-white">New Secure Vault</h3>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Card>
+      <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '12px' }}>New secure vault</h3>
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Vault Name *</label>
-          <input 
+          <Label>Vault Name *</Label>
+          <Input
             type="text" 
-            className="input-field" 
             placeholder="e.g. Finance Docs"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -60,9 +70,9 @@ export default function VaultCreate({ onCreated }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+          <Label>Description</Label>
           <textarea 
-            className="input-field min-h-[50px]" 
+            style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '9px 12px', color: 'var(--text-primary)', minHeight: '50px', fontFamily: 'var(--font-sans)', fontSize: '13px' }}
             placeholder="Optional purpose description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -70,10 +80,9 @@ export default function VaultCreate({ onCreated }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Master PIN *</label>
-          <input 
+          <Label>Master PIN *</Label>
+          <Input
             type="password" 
-            className="input-field" 
             placeholder="Choose a PIN to secure this vault"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
@@ -83,10 +92,9 @@ export default function VaultCreate({ onCreated }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Confirm PIN *</label>
-          <input 
+          <Label>Confirm PIN *</Label>
+          <Input
             type="password" 
-            className="input-field" 
             placeholder="Confirm your Master PIN"
             value={confirmPin}
             onChange={(e) => setConfirmPin(e.target.value)}
@@ -95,15 +103,13 @@ export default function VaultCreate({ onCreated }) {
             minLength={4}
           />
         </div>
-        <div className="flex justify-end gap-3 mt-2">
-          <button type="button" onClick={() => setIsOpen(false)} className="btn-secondary" disabled={loading}>
-            Cancel
-          </button>
-          <button type="submit" className="btn-primary" disabled={loading || !name}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+          <Button type="button" onClick={() => setIsOpen(false)} variant="ghost" disabled={loading}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={loading || !name}>
             {loading ? 'Creating...' : 'Create Vault'}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </Card>
   );
 }

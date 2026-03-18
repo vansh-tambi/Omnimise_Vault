@@ -3,6 +3,7 @@ import { useVaultKey } from '../context/VaultKeyContext';
 import { deriveVaultKey, encryptFile } from '../encryption/crypto';
 import { KeyRound } from 'lucide-react';
 import api from '../services/api';
+import { Badge, Button, Card, Input } from '../components/ui';
 
 export default function VaultPinPrompt({ vaultId, onKeyDerived }) {
   const [pin, setPin] = useState('');
@@ -69,65 +70,68 @@ export default function VaultPinPrompt({ vaultId, onKeyDerived }) {
 
   if (setupMode) {
     return (
-      <div className="card max-w-sm mx-auto p-8 flex flex-col items-center shadow-xl border-amber-500/30">
-        <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-6">
-          <KeyRound className="w-8 h-8 text-amber-300" />
+      <Card style={{ maxWidth: '420px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)' }}>Set your vault PIN</h3>
+          <Badge variant="amber">pending</Badge>
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2 text-center">Set Your New Vault PIN</h3>
-        <p className="text-gray-300 text-sm text-center mb-6">
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '14px' }}>
           This vault was created for you. Enter your temporary PIN to unlock, then set a new permanent PIN.
         </p>
 
-        <form onSubmit={handleSetupPin} className="w-full flex gap-3 flex-col">
-          <input
+        <form onSubmit={handleSetupPin} style={{ display: 'grid', gap: '8px' }}>
+          <Input
             type="password"
             value={newPin}
             onChange={(e) => setNewPin(e.target.value)}
-            className="input-field text-center tracking-[0.5em] font-mono text-xl"
+            style={{ textAlign: 'center', letterSpacing: '0.3em', fontFamily: 'var(--font-mono)' }}
             placeholder="New PIN"
             maxLength={8}
             required
           />
-          <input
+          <Input
             type="password"
             value={confirmPin}
             onChange={(e) => setConfirmPin(e.target.value)}
-            className="input-field text-center tracking-[0.5em] font-mono text-xl"
+            style={{ textAlign: 'center', letterSpacing: '0.3em', fontFamily: 'var(--font-mono)' }}
             placeholder="Confirm PIN"
             maxLength={8}
             required
           />
-          <button type="submit" disabled={loading || !setupSourceKey} className="btn-primary w-full shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition">
+          <Button type="submit" disabled={loading || !setupSourceKey} variant="primary" style={{ width: '100%', justifyContent: 'center', marginTop: '6px' }}>
             {loading ? 'Saving...' : 'Set New PIN'}
-          </button>
+          </Button>
         </form>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="card max-w-sm mx-auto p-8 flex flex-col items-center shadow-xl border-blue-500/20">
-      <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-6">
-        <KeyRound className="w-8 h-8 text-blue-400" />
+    <Card style={{ maxWidth: '420px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <KeyRound className="w-4 h-4" />
+          Vault locked
+        </h3>
+        <Badge variant="default">locked</Badge>
       </div>
-      <h3 className="text-xl font-semibold text-white mb-2">Vault Locked</h3>
-      <p className="text-gray-400 text-sm text-center mb-6">Enter your PIN to derive encryption keys. The server will never see this.</p>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '14px' }}>Enter your PIN to derive encryption keys. The server never receives this PIN.</p>
       
-      <form onSubmit={handleUnlock} className="w-full flex gap-3 flex-col">
-        <input 
+      <form onSubmit={handleUnlock} style={{ display: 'grid', gap: '8px' }}>
+        <Input
           type="password" 
           value={pin}
           onChange={(e) => setPin(e.target.value)}
-          className="input-field text-center tracking-[0.5em] font-mono text-xl" 
+          style={{ textAlign: 'center', letterSpacing: '0.3em', fontFamily: 'var(--font-mono)' }}
           placeholder="••••"
           maxLength={8}
           required
           autoFocus
         />
-        <button type="submit" disabled={loading} className="btn-primary w-full shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition">
+        <Button type="submit" disabled={loading} variant="primary" style={{ width: '100%', justifyContent: 'center', marginTop: '6px' }}>
           {loading ? 'Unlocking...' : 'Unlock Vault'}
-        </button>
+        </Button>
       </form>
-    </div>
+    </Card>
   );
 }

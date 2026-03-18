@@ -7,6 +7,7 @@ import {
   importPublicKeyFromBase64,
   wrapVaultKey,
 } from '../encryption/crypto';
+import { Badge, Button, Input, Label } from '../components/ui';
 
 export default function ApproveShareModal({ request, onClose, onApproved }) {
   const { vaultKey, unlockVault } = useVaultKey();
@@ -142,25 +143,41 @@ export default function ApproveShareModal({ request, onClose, onApproved }) {
   const selectedVaultName = userVaults.find((v) => v.id === selectedVaultId)?.name || '';
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-lg bg-gray-900 border-green-500/30 p-6 rounded-xl shadow-2xl relative">
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 200,
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '28px',
+        width: '100%',
+        maxWidth: '560px',
+        boxShadow: 'var(--shadow-lg)',
+        position: 'relative',
+      }}>
         <button
           onClick={onClose}
           disabled={loading}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition"
+          style={{ position: 'absolute', top: '14px', right: '14px', background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
-          <Check className="w-5 h-5 text-green-400" />
+        <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Check className="w-4 h-4" style={{ color: 'var(--green)' }} />
           Approve Request
         </h3>
-        <p className="text-sm text-gray-400 mb-5">
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
           Approving{' '}
-          <span className="text-white font-medium">{request.document_type}</span> requested by{' '}
-          <span className="text-blue-400">{request.requester_email || request.requester_id}</span>
+          <span style={{ color: 'var(--text-primary)' }}>{request.document_type}</span> requested by{' '}
+          <span style={{ color: 'var(--text-secondary)' }}>{request.requester_email || request.requester_id}</span>
         </p>
+        <div style={{ marginBottom: '14px' }}><Badge variant="amber">pending</Badge></div>
 
         {/* No vault state */}
         {!fetchingVaults && userVaults.length === 0 && (
@@ -181,13 +198,11 @@ export default function ApproveShareModal({ request, onClose, onApproved }) {
         {/* Vault selector — always visible */}
         {!fetchingVaults && userVaults.length > 0 && (
           <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wider">
-              Choose source vault
-            </label>
+            <Label>Choose source vault</Label>
             <select
               value={selectedVaultId || ''}
               onChange={(e) => setSelectedVaultId(e.target.value)}
-              className="input-field w-full"
+              style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '9px 12px', color: 'var(--text-primary)', fontSize: '13px' }}
               disabled={loading || unlocking}
             >
               {userVaults.map((v) => (
@@ -210,11 +225,11 @@ export default function ApproveShareModal({ request, onClose, onApproved }) {
             </div>
             <form onSubmit={handleUnlockVault} className="flex gap-2">
               <div className="relative flex-1">
-                <input
+                <Input
                   type={showPin ? 'text' : 'password'}
                   value={pin}
                   onChange={(e) => { setPin(e.target.value); setPinError(''); }}
-                  className="input-field w-full pr-10 font-mono tracking-widest"
+                  style={{ paddingRight: '36px', fontFamily: 'var(--font-mono)', letterSpacing: '0.2em' }}
                   placeholder="Enter vault PIN"
                   disabled={unlocking}
                   autoFocus
@@ -228,13 +243,9 @@ export default function ApproveShareModal({ request, onClose, onApproved }) {
                   {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <button
-                type="submit"
-                disabled={unlocking || !pin}
-                className="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium transition disabled:opacity-50 whitespace-nowrap"
-              >
+              <Button type="submit" disabled={unlocking || !pin} variant="default">
                 {unlocking ? 'Unlocking…' : 'Unlock'}
-              </button>
+              </Button>
             </form>
             {pinError && (
               <p className="mt-2 text-xs text-red-400">{pinError}</p>
@@ -290,22 +301,24 @@ export default function ApproveShareModal({ request, onClose, onApproved }) {
         )}
 
         <div className="flex flex-col gap-2">
-          <button
+          <Button
             onClick={handleApproveAndShare}
             disabled={loading || !selectedDoc || !currentKey || userVaults.length === 0}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm hover:bg-green-500 transition disabled:opacity-40 font-medium"
+            variant="success"
+            style={{ width: '100%', justifyContent: 'center' }}
           >
             <Check className="w-4 h-4" />
             {loading ? 'Processing…' : selectedDoc ? `Share "${selectedDoc.filename}"` : 'Approve & Share Document'}
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleApproveOnly}
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-gray-300 text-sm hover:bg-gray-600 transition disabled:opacity-50"
+            variant="default"
+            style={{ width: '100%', justifyContent: 'center' }}
           >
             <Check className="w-4 h-4" />
             {loading ? '...' : 'Approve Only (no document)'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

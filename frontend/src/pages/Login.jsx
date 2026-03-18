@@ -1,7 +1,6 @@
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
-import { Shield } from 'lucide-react';
 import { generateRSAKeyPair, exportPublicKeyAsBase64, exportPrivateKeyAsBase64 } from '../encryption/crypto';
 
 export default function Login() {
@@ -47,37 +46,98 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full card shadow-2xl border-gray-700/50 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
-        
-          <div className="relative z-10 flex flex-col items-center">
-          <div className="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6 shadow-inner ring-1 ring-blue-500/30">
-            <Shield className="w-10 h-10 text-blue-400" />
-          </div>
-          <h1 className="text-3xl font-extrabold text-white mb-2 text-center">Omnimise Vault</h1>
-          <p className="text-gray-400 mb-8 text-center max-w-xs">Zero-knowledge encrypted cloud storage for your sensitive documents.</p>
-          
-          <div className="w-full relative py-6 border-t border-gray-700">
-            <div className="flex justify-center flex-col items-center gap-4 w-full">
-              <span className="text-sm font-medium text-gray-400 uppercase tracking-widest">Sign in to access</span>
-              <GoogleLogin
-                onSuccess={handleSuccess}
-                onError={() => console.log('Login Failed')}
-                theme="filled_black"
-                size="large"
-                shape="rectangular"
-                text="continue_with"
-                width="320"
-                flow="auth-code"
-                scope="openid email profile https://www.googleapis.com/auth/drive.file"
-                access_type="offline"
-                prompt="consent"
-              />
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg-base)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+    }}>
+      <div style={{ width: '100%', maxWidth: '360px' }}>
+        <div style={{ marginBottom: '48px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '32px',
+          }}>
+            <div style={{
+              width: '28px', height: '28px',
+              background: 'var(--accent)',
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="2" y="6" width="10" height="7" rx="1" fill="#0a0a0a"/>
+                <path d="M4 6V4a3 3 0 016 0v2" stroke="#0a0a0a" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: 'var(--text-primary)',
+              letterSpacing: '0.02em',
+            }}>Omnimise Vault</span>
           </div>
+
+          <h1 style={{
+            fontSize: '22px',
+            fontWeight: '500',
+            color: 'var(--text-primary)',
+            marginBottom: '8px',
+            lineHeight: '1.3',
+          }}>Secure document vault</h1>
+          <p style={{
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+            lineHeight: '1.6',
+          }}>
+            End-to-end encrypted. Zero-knowledge.<br/>
+            Your files never leave your browser unencrypted.
+          </p>
         </div>
+
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '24px',
+          marginBottom: '16px',
+        }}>
+          <p style={{
+            fontSize: '11px',
+            color: 'var(--text-tertiary)',
+            marginBottom: '16px',
+            fontFamily: 'var(--font-mono)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}>Continue with</p>
+
+          <GoogleLogin
+            onSuccess={handleSuccess}
+            onError={() => console.log('Login Failed')}
+            theme="filled_black"
+            size="large"
+            shape="rectangular"
+            text="continue_with"
+            width="320"
+            flow="auth-code"
+            scope="openid email profile https://www.googleapis.com/auth/drive.file"
+            access_type="offline"
+            prompt="consent"
+          />
+        </div>
+
+        <p style={{
+          fontSize: '11px',
+          color: 'var(--text-tertiary)',
+          textAlign: 'center',
+          lineHeight: '1.6',
+        }}>
+          AES-256-GCM · RSA-OAEP · PBKDF2 · Zero-knowledge
+        </p>
       </div>
     </div>
   );

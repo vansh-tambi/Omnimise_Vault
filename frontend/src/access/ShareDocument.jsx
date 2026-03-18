@@ -4,6 +4,7 @@ import {
   importPublicKeyFromBase64, 
   wrapVaultKey 
 } from '../encryption/crypto';
+import { Badge, Button, Input, Label } from '../components/ui';
 
 export default function ShareDocument({ document, currentKey, onClose, onSuccess, prefillEmail = '' }) {
   const [recipientQuery, setRecipientQuery] = useState(prefillEmail);
@@ -70,15 +71,29 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md bg-gray-900 border-blue-500/30 p-6 rounded-lg shadow-xl">
-        <h3 className="text-xl font-bold text-white mb-2">Securely Share Document</h3>
-        <p className="text-sm text-gray-400 mb-6 truncate">Sharing: {document.filename}</p>
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 200,
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '28px',
+        width: '100%',
+        maxWidth: '440px',
+        boxShadow: 'var(--shadow-lg)',
+      }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '6px' }}>Secure document sharing</h3>
+        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sharing: {document.filename}</p>
         
-        <div className="space-y-4">
+        <div style={{ display: 'grid', gap: '12px' }}>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Recipient email or Account ID</label>
-            <input 
+            <Label>Recipient email or account ID</Label>
+            <Input
               type="text"
               value={recipientQuery}
               onChange={(e) => {
@@ -87,33 +102,35 @@ export default function ShareDocument({ document, currentKey, onClose, onSuccess
                   resetLookup();
                 }
               }}
-              className="input-field w-full" 
               placeholder="e.g. colleague@company.com or 67f1..."
             />
           </div>
           {recipientMatch && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-              <p className="font-medium">You are about to share with: {recipientMatch.email}. Confirm?</p>
+            <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid rgba(68,255,136,0.2)', background: 'var(--green-dim)', padding: '10px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--green)' }}>You are about to share with: {recipientMatch.email}. Confirm?</p>
             </div>
           )}
-          <div className="text-xs text-blue-400/80 bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-elevated)', padding: '10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}>
             The vault key will be algorithmically wrapped using the recipient's RSA public key. The server cannot derive the AES key.
+          </div>
+          <div>
+            <Badge variant="blue">shared</Badge>
           </div>
         </div>
         
-        <div className="flex justify-end gap-3 mt-6">
-          <button disabled={loading} onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition">Cancel</button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '18px' }}>
+          <Button disabled={loading} onClick={onClose} variant="ghost">Cancel</Button>
           {recipientMatch ? (
             <>
-              <button disabled={loading} onClick={resetLookup} className="px-4 py-2 rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600 transition">Cancel</button>
-              <button disabled={loading} onClick={executeShare} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg shadow-blue-500/20">
+              <Button disabled={loading} onClick={resetLookup} variant="default">Reset</Button>
+              <Button disabled={loading} onClick={executeShare} variant="primary">
                 {loading ? 'Sharing...' : 'Confirm'}
-              </button>
+              </Button>
             </>
           ) : (
-            <button disabled={loading || !recipientQuery.trim()} onClick={lookupRecipient} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition shadow-lg shadow-blue-500/20">
+            <Button disabled={loading || !recipientQuery.trim()} onClick={lookupRecipient} variant="primary">
               {loading ? 'Looking up...' : 'Continue'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

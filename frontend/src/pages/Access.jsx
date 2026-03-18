@@ -4,6 +4,7 @@ import { Link2, FileText, ShieldCheck, Calendar, SendHorizontal, Inbox } from 'l
 import api from '../services/api';
 import { useVaultKey } from '../context/VaultKeyContext';
 import { decryptFile, unwrapVaultKey, importPrivateKeyFromBase64, hashFile } from '../encryption/crypto';
+import { Badge, Card, EmptyState, PageHeader } from '../components/ui';
 
 export default function Access() {
   const [receivedShares, setReceivedShares] = useState([]);
@@ -98,33 +99,59 @@ export default function Access() {
   };
 
   return (
-    <div className="space-y-10">
-      <div className="space-y-6 pt-2">
-        <div className="flex items-center gap-3 border-b border-gray-700 pb-4">
-          <Link2 className="w-6 h-6 text-blue-400" />
-          <h1 className="text-2xl font-semibold text-white">Shared Documents</h1>
-        </div>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <PageHeader
+        title="Shared Documents"
+        subtitle="Files shared securely across vault boundaries"
+      />
 
         {/* Tab switcher */}
-        <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-lg w-fit border border-gray-700">
+        <div style={{
+          display: 'flex',
+          gap: '2px',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+          padding: '3px',
+          marginBottom: '24px',
+          width: 'fit-content',
+        }}>
           <button
             onClick={() => setActiveTab('received')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
-              activeTab === 'received'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 'calc(var(--radius-md) - 2px)',
+              fontSize: '12px',
+              fontFamily: 'var(--font-mono)',
+              background: activeTab === 'received' ? 'var(--bg-elevated)' : 'transparent',
+              color: activeTab === 'received' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
           >
             <Inbox className="w-4 h-4" />
             Shared with Me
           </button>
           <button
             onClick={() => setActiveTab('sent')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition ${
-              activeTab === 'sent'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 'calc(var(--radius-md) - 2px)',
+              fontSize: '12px',
+              fontFamily: 'var(--font-mono)',
+              background: activeTab === 'sent' ? 'var(--bg-elevated)' : 'transparent',
+              color: activeTab === 'sent' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
           >
             <SendHorizontal className="w-4 h-4" />
             Outgoing
@@ -132,81 +159,88 @@ export default function Access() {
         </div>
 
         {loading ? (
-          <div className="text-gray-400">Syncing shared documents...</div>
+          <div style={{ color: 'var(--text-secondary)' }}>Syncing shared documents...</div>
         ) : activeTab === 'received' ? (
           receivedShares.length === 0 ? (
-            <div className="card text-center p-12 text-gray-400 border-dashed border-2 flex flex-col items-center gap-3">
-              <ShieldCheck className="w-12 h-12 text-gray-600" />
-              No one has shared any documents with you yet.
-            </div>
+            <Card>
+              <EmptyState
+                icon={<ShieldCheck className="w-8 h-8" />}
+                title="No shared documents"
+                description="No one has shared any documents with you yet."
+              />
+            </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
+            <div style={{ display: 'grid', gap: '10px' }}>
               {receivedShares.map(share => (
-                <div
+                <Card
                   key={share.access_id}
                   onClick={() => openSharedDoc(share)}
-                  className="card p-5 group hover:border-blue-500/50 transition cursor-pointer flex items-center justify-between"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}
                 >
-                  <div className="flex items-center gap-4 truncate">
-                    <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-blue-500/20 transition shrink-0">
-                      <FileText className="w-6 h-6" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <div style={{ color: 'var(--text-secondary)' }}>
+                      <FileText className="w-4 h-4" />
                     </div>
-                    <div className="truncate">
-                      <h4 className="text-white font-medium truncate">{share.filename}</h4>
-                      <p className="text-xs text-gray-400">Owner: {share.owner_id?.slice(-8)}</p>
+                    <div style={{ minWidth: 0 }}>
+                      <h4 style={{ color: 'var(--text-primary)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{share.filename}</h4>
+                      <p style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Owner: {share.owner_id?.slice(-8)}</p>
                     </div>
                   </div>
-                  <div className="text-xs text-gray-500 flex flex-col items-end shrink-0 ml-3">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Calendar className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
                       {new Date(share.granted_at).toLocaleDateString()}
                     </span>
+                    <Badge variant="blue">shared</Badge>
                     {share.expires_at && (
-                      <span className="text-red-400/70 mt-1">Expires soon</span>
+                      <Badge variant="amber">pending</Badge>
                     )}
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           )
         ) : sentShares.length === 0 ? (
-          <div className="card text-center p-12 text-gray-400 border-dashed border-2 flex flex-col items-center gap-3">
-            <SendHorizontal className="w-12 h-12 text-gray-600" />
-            You haven't shared any documents yet.
-          </div>
+          <Card>
+            <EmptyState
+              icon={<SendHorizontal className="w-8 h-8" />}
+              title="No outgoing shares"
+              description="You haven't shared any documents yet."
+            />
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
+          <div style={{ display: 'grid', gap: '10px' }}>
             {sentShares.map(share => (
-              <div
+              <Card
                 key={share.access_id}
-                className="card p-5 flex items-center justify-between"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}
               >
-                <div className="flex items-center gap-4 truncate">
-                  <div className="p-3 bg-green-500/10 rounded-xl text-green-400 shrink-0">
-                    <FileText className="w-6 h-6" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    <FileText className="w-4 h-4" />
                   </div>
-                  <div className="truncate">
-                    <h4 className="text-white font-medium truncate">{share.filename}</h4>
-                    <p className="text-xs text-gray-400">
+                  <div style={{ minWidth: 0 }}>
+                    <h4 style={{ color: 'var(--text-primary)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{share.filename}</h4>
+                    <p style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                       Shared with:{' '}
-                      <span className="text-gray-200">{share.shared_with_email || share.shared_with?.slice(-8)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{share.shared_with_email || share.shared_with?.slice(-8)}</span>
                     </p>
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 flex flex-col items-end shrink-0 ml-3">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
                     {new Date(share.granted_at).toLocaleDateString()}
                   </span>
+                  <Badge variant="blue">shared</Badge>
                   {share.expires_at && (
-                    <span className="text-red-400/70 mt-1">Expires soon</span>
+                    <Badge variant="amber">pending</Badge>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }

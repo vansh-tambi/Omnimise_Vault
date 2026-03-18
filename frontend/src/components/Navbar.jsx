@@ -4,6 +4,52 @@ import { useAuth } from '../hooks/useAuth';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 
+const navStyle = {
+  height: '52px',
+  background: 'var(--bg-base)',
+  borderBottom: '1px solid var(--border-subtle)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '0 24px',
+  position: 'sticky',
+  top: 0,
+  zIndex: 100,
+};
+
+const logoStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '12px',
+  fontWeight: '500',
+  color: 'var(--text-primary)',
+  letterSpacing: '0.04em',
+  textDecoration: 'none',
+};
+
+const navLinkStyle = (active) => ({
+  fontSize: '13px',
+  color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+  textDecoration: 'none',
+  padding: '4px 0',
+  borderBottom: active ? '1px solid var(--accent)' : '1px solid transparent',
+  transition: 'color 0.15s, border-color 0.15s',
+});
+
+const iconButtonStyle = {
+  position: 'relative',
+  color: 'var(--text-secondary)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '28px',
+  height: '28px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid transparent',
+};
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -81,51 +127,106 @@ export default function Navbar() {
     };
   }, [hasSession, location.pathname, user?.id]);
 
+  const isAccess = location.pathname.startsWith('/access');
+  const isRequests = location.pathname.startsWith('/requests');
+  const isMessages = location.pathname.startsWith('/messages');
+  const isAudit = location.pathname.startsWith('/audit');
+
   return (
-    <nav className="h-16 w-full shrink-0 border-b border-gray-700 bg-dark-bg flex items-center justify-between px-6 sticky top-0 z-50">
-      <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition">
-        <Shield className="w-8 h-8 text-dark-accent" />
-        <span className="text-xl font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-400 to-indigo-500">
-          Omnimise Vault
-        </span>
+    <nav style={navStyle}>
+      <Link to="/" style={logoStyle}>
+        <Shield className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+        Omnimise Vault
       </Link>
-      
+
       {hasSession && (
-        <div className="flex items-center gap-4">
-          <Link to="/access" className="p-2 hover:bg-gray-800 rounded-full transition relative" title="Shared Documents">
-            <Share2 className="w-5 h-5 text-gray-300" />
-            {badges.access && (
-              <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-dark-bg" />
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Link to="/access" style={navLinkStyle(isAccess)} title="Shared Documents">
+            <span style={iconButtonStyle}>
+              <Share2 className="w-4 h-4" />
+              {badges.access && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    height: '6px',
+                    width: '6px',
+                    borderRadius: '999px',
+                    background: 'var(--red)',
+                  }}
+                />
+              )}
+            </span>
           </Link>
-          <Link to="/requests" className="p-2 hover:bg-gray-800 rounded-full transition relative" title="Requests">
-            <ClipboardList className="w-5 h-5 text-gray-300" />
-            {badges.requests && (
-              <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-dark-bg" />
-            )}
+
+          <Link to="/requests" style={navLinkStyle(isRequests)} title="Requests">
+            <span style={iconButtonStyle}>
+              <ClipboardList className="w-4 h-4" />
+              {badges.requests && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    height: '6px',
+                    width: '6px',
+                    borderRadius: '999px',
+                    background: 'var(--red)',
+                  }}
+                />
+              )}
+            </span>
           </Link>
-          <Link to="/messages" className="p-2 hover:bg-gray-800 rounded-full transition relative">
-             <MessageSquare className="w-5 h-5 text-gray-300" />
-             {badges.messages && (
-               <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-dark-bg" />
-             )}
+
+          <Link to="/messages" style={navLinkStyle(isMessages)} title="Messages">
+            <span style={iconButtonStyle}>
+              <MessageSquare className="w-4 h-4" />
+              {badges.messages && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    height: '6px',
+                    width: '6px',
+                    borderRadius: '999px',
+                    background: 'var(--red)',
+                  }}
+                />
+              )}
+            </span>
           </Link>
-          <Link to="/audit" className="p-2 hover:bg-gray-800 rounded-full transition" title="Activity Log">
-             <Activity className="w-5 h-5 text-gray-300" />
+
+          <Link to="/audit" style={navLinkStyle(isAudit)} title="Activity Log">
+            <span style={iconButtonStyle}>
+              <Activity className="w-4 h-4" />
+            </span>
           </Link>
-          <div className="flex items-center gap-3 border-l border-gray-700 pl-4 ml-2">
-            <Link to="/profile" title="Profile">
-              <img 
-                src={displayPicture}
-                alt={displayName}
-                className="w-8 h-8 rounded-full border border-gray-600"
-              />
-            </Link>
-            <span className="text-sm font-medium hidden md:block">{displayName}</span>
-            <button onClick={logout} className="p-2 hover:bg-gray-800 text-gray-400 hover:text-white rounded-full transition" title="Logout">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+
+          <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)', margin: '0 4px' }} />
+
+          <Link to="/profile" title="Profile" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+            <img
+              src={displayPicture}
+              alt={displayName}
+              style={{ width: '24px', height: '24px', borderRadius: '999px', border: '1px solid var(--border-default)' }}
+            />
+            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{displayName}</span>
+          </Link>
+
+          <button
+            onClick={logout}
+            title="Logout"
+            style={{
+              ...iconButtonStyle,
+              background: 'transparent',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       )}
     </nav>
