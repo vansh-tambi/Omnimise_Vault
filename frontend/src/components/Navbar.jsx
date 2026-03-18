@@ -58,16 +58,14 @@ const iconButtonStyle = {
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
-  if (location.pathname === '/login') {
-    return null;
-  }
   const hasSession = !!localStorage.getItem('token');
   const displayName = user?.name || 'Account';
   const displayPicture = user?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+  const isLoginRoute = location.pathname === '/login';
   const [badges, setBadges] = useState({ access: false, requests: false, messages: false });
 
   useEffect(() => {
-    if (!hasSession) {
+    if (isLoginRoute || !hasSession) {
       setBadges({ access: false, requests: false, messages: false });
       return;
     }
@@ -133,7 +131,11 @@ export default function Navbar() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [hasSession, location.pathname, user?.id]);
+  }, [hasSession, isLoginRoute, location.pathname, user?.id]);
+
+  if (isLoginRoute) {
+    return null;
+  }
 
   const isAccess = location.pathname.startsWith('/access');
   const isRequests = location.pathname.startsWith('/requests');
